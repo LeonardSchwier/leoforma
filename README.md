@@ -4,10 +4,10 @@
 
 ## Use it from another repository
 
-Pin an exact tag; the lockfile then pins the commit:
+Install the built tarball of a release tag. Release tags point at a commit that includes the built `dist/`, so the install needs no build step and works offline from the npm cache, on Windows and in sandboxed packagers. The lockfile pins the tarball integrity:
 
 ```sh
-npm install --save-exact github:LeonardSchwier/leoforma#v0.1.0
+npm install --save-exact https://codeload.github.com/LeonardSchwier/leoforma/tar.gz/refs/tags/v0.1.1
 ```
 
 ```ts
@@ -24,7 +24,7 @@ npm ci
 npm run check   # tsc, eslint, vitest, build
 ```
 
-`npm run build` writes `dist/` (gitignored): `index.js` and types, `tokens.css`, `tokens.json`, `fonts.css`, `components.css`, `styles.css`, and the font files with their licences. `npm install` from git runs the build through the `prepare` script.
+`npm run build` writes `dist/` (gitignored): `index.js` and types, `tokens.css`, `tokens.json`, `fonts.css`, `components.css`, `styles.css`, and the font files with their licences. `npm install` from a git branch or commit runs the build through the `prepare` script; release tags (v0.1.1 and later) ship `dist/` instead, committed only on the tagged commit, never on main.
 
 ## Rules
 

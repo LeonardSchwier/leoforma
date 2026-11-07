@@ -1,6 +1,6 @@
 {
   "name": "@leonardschwier/leoforma",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Leoforma: design tokens and thin, accessible Preact components (Folio and Nordic themes) shared by the Leo apps.",
   "license": "MIT",
   "author": "Leonard Schwier",
