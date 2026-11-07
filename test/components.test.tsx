@@ -9,6 +9,8 @@ import {
   Dialog,
   dismissTopOverlay,
   EmptyState,
+  Icon,
+  ICON_NAMES,
   IconButton,
   Input,
   Menu,
@@ -16,7 +18,9 @@ import {
   resetOverlayStackForTests,
   SegmentedControl,
   Select,
+  Sheet,
   Spinner,
+  StatusIndicator,
   Switch,
   Tabs,
   Textarea,
@@ -666,5 +670,122 @@ describe("Badge, Card, EmptyState", () => {
       </main>,
     );
     await expectNoAxeViolations(container);
+  });
+});
+
+describe("Icon", () => {
+  it.each([...ICON_NAMES])("%s renders a decorative svg, or a named image with a title", (name) => {
+    const plain = render(<Icon name={name} />);
+    const svg = plain.container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    plain.unmount();
+    const named = render(<Icon name={name} title="Label" size={24} />);
+    const titled = named.container.querySelector("svg");
+    expect(titled?.hasAttribute("aria-hidden")).toBe(false);
+    expect(named.getByRole("img", { name: "Label" })).toBeTruthy();
+    expect(titled?.getAttribute("width")).toBe("24");
+  });
+
+  it("has no axe violations", async () => {
+    const { container } = render(
+      <div>
+        <Icon name="check" />
+        <Icon name="search" title="Search" />
+      </div>,
+    );
+    await expectNoAxeViolations(container);
+  });
+});
+
+describe("StatusIndicator", () => {
+  it("keeps the text visible and adds an icon per variant", () => {
+    const { getByText, container } = render(<StatusIndicator variant="success">Saved</StatusIndicator>);
+    expect(getByText("Saved")).toBeTruthy();
+    expect(container.querySelector("svg")).not.toBeNull();
+    expect(container.querySelector(".ds-status-success")).not.toBeNull();
+  });
+
+  it("maps live to a role and shows a spinner while in progress", () => {
+    const { getByRole, container } = render(
+      <div>
+        <StatusIndicator live="assertive" variant="danger">Failed</StatusIndicator>
+        <StatusIndicator live="polite" variant="progress">Syncing</StatusIndicator>
+      </div>,
+    );
+    expect(getByRole("alert").textContent).toBe("Failed");
+    const status = getByRole("status");
+    expect(status.getAttribute("aria-busy")).toBe("true");
+    expect(status.querySelector(".ds-spinner")).not.toBeNull();
+    expect(container.querySelectorAll("svg").length).toBe(2);
+  });
+
+  it("can drop the icon and has no axe violations", async () => {
+    const { container } = render(
+      <div>
+        <StatusIndicator icon={false} variant="warning">Careful</StatusIndicator>
+        <StatusIndicator variant="neutral" size="sm">Idle</StatusIndicator>
+        <StatusIndicator variant="danger" live="assertive">Failed</StatusIndicator>
+      </div>,
+    );
+    expect(container.querySelector(".ds-status-warning svg")).toBeNull();
+    await expectNoAxeViolations(container);
+  });
+});
+
+describe("EmptyState slots", () => {
+  it("is a labelled region with bounded primary and secondary actions", async () => {
+    const { getByRole, container } = render(
+      <EmptyState
+        size="sm"
+        title="No notes"
+        description="Create one"
+        icon={<Icon name="fileText" />}
+        primaryAction={<Button variant="primary">Create</Button>}
+        secondaryAction={<Button>Import</Button>}
+      />,
+    );
+    const region = getByRole("region", { name: "No notes" });
+    expect(region.className).toContain("ds-empty-sm");
+    expect(region.getAttribute("aria-describedby")).toBeTruthy();
+    expect(container.querySelectorAll(".ds-empty-actions button").length).toBe(2);
+    await expectNoAxeViolations(container);
+  });
+});
+
+describe("Sheet", () => {
+  afterEach(() => resetOverlayStackForTests());
+
+  it("is a bottom anchored modal with a close control that dismisses it", () => {
+    const onDismiss = vi.fn();
+    const { getByRole } = render(
+      <Sheet title="Filters" description="Narrow the list" onDismiss={onDismiss}>
+        <p>Body</p>
+      </Sheet>,
+    );
+    const dialog = getByRole("dialog", { name: "Filters" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.className).toContain("ds-sheet");
+    fireEvent.click(getByRole("button", { name: "Close" }));
+    expect(onDismiss).toHaveBeenCalledWith("close-button");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("can hide the close control and keeps focus inside", () => {
+    const { getByRole, queryByRole } = render(
+      <Sheet title="Pick" showCloseButton={false} onDismiss={() => {}} actions={<Button>Done</Button>} />,
+    );
+    expect(queryByRole("button", { name: "Close" })).toBeNull();
+    expect(document.activeElement).toBe(getByRole("button", { name: "Done" }));
+  });
+
+  it("has no axe violations", async () => {
+    const { baseElement } = render(
+      <Sheet title="Filters" description="Narrow" onDismiss={() => {}} actions={<Button>Apply</Button>}>
+        <p>Body</p>
+      </Sheet>,
+    );
+    await expectNoAxeViolations(baseElement);
   });
 });

@@ -1,4 +1,5 @@
 import type { ComponentChildren, JSX } from "preact";
+import { useRef } from "preact/hooks";
 import { cx } from "./cx";
 
 export type BadgeTone = "neutral" | "accent" | "success" | "warning" | "danger";
@@ -53,27 +54,67 @@ export function Card({
   );
 }
 
+export type EmptyStateSize = "sm" | "md";
+
 export interface EmptyStateProps {
   title: ComponentChildren;
   description?: ComponentChildren;
+  /** Decorative glyph, hidden from assistive technology. */
   icon?: ComponentChildren;
+  /** Free-form actions. Prefer the two bounded slots below. */
   actions?: ComponentChildren;
+  /** At most one primary and one secondary action keep the hierarchy clear. */
+  primaryAction?: ComponentChildren;
+  secondaryAction?: ComponentChildren;
+  size?: EmptyStateSize;
   className?: string;
 }
+
+let emptyStateCount = 0;
 
 export function EmptyState({
   title,
   description,
   icon,
   actions,
+  primaryAction,
+  secondaryAction,
+  size = "md",
   className,
 }: EmptyStateProps): JSX.Element {
+  const idRef = useRef<string | undefined>(undefined);
+  if (!idRef.current) {
+    emptyStateCount += 1;
+    idRef.current = `ds-empty-${emptyStateCount}`;
+  }
+  const titleId = `${idRef.current}-title`;
+  const descriptionId = description ? `${idRef.current}-description` : undefined;
   return (
-    <div class={cx("ds-empty", className)}>
-      {icon && <span aria-hidden="true">{icon}</span>}
-      <p class="ds-empty-title">{title}</p>
-      {description && <p class="ds-empty-description">{description}</p>}
+    <section
+      class={cx("ds-empty", `ds-empty-${size}`, className)}
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+    >
+      {icon && (
+        <span class="ds-empty-icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      <p id={titleId} class="ds-empty-title">
+        {title}
+      </p>
+      {description && (
+        <p id={descriptionId} class="ds-empty-description">
+          {description}
+        </p>
+      )}
+      {(primaryAction || secondaryAction) && (
+        <div class="ds-empty-actions">
+          {primaryAction}
+          {secondaryAction}
+        </div>
+      )}
       {actions}
-    </div>
+    </section>
   );
 }
