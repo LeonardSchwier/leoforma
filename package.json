@@ -48,7 +48,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "peerDependencies": {
     "preact": ">=10.25.0 <12"
@@ -60,6 +61,7 @@
     "axe-core": "^4.11.0",
     "eslint": "^9.39.0",
     "jsdom": "^26.1.0",
+    "playwright": "^1.65.0",
     "preact": "^10.25.1",
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.46.0",
