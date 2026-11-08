@@ -8,7 +8,7 @@ export interface IconButtonProps extends Omit<
   JSX.ButtonHTMLAttributes<HTMLButtonElement>,
   "size" | "label" | "aria-label" | "title" | "loading" | "icon"
 > {
-  /** The glyph. The system ships no icon set, so hosts keep their own. */
+  /** The glyph, for example an `Icon`. */
   icon: ComponentChildren;
   /** Required: an icon alone gives assistive technology nothing to announce.
    * Also used as the native tooltip. */

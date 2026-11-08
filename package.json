@@ -47,9 +47,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "check": "npm run typecheck && npm run lint && npm test && npm run docs:check && npm run build",
     "prepare": "npm run build",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "docs": "node scripts/docs-props.mjs",
+    "docs:check": "node scripts/docs-props.mjs --check"
   },
   "peerDependencies": {
     "preact": ">=10.25.0 <12"

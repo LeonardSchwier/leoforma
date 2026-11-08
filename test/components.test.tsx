@@ -99,6 +99,16 @@ describe("Spinner", () => {
     const second = render(<Spinner label="Loading notes" />);
     expect(second.getByRole("status", { name: "Loading notes" })).toBeTruthy();
   });
+
+  it("has no axe violations", async () => {
+    const { container } = render(
+      <div>
+        <Spinner />
+        <Spinner label="Loading notes" />
+      </div>,
+    );
+    await expectNoAxeViolations(container);
+  });
 });
 
 describe("form fields", () => {
@@ -281,6 +291,17 @@ describe("SegmentedControl", () => {
 describe("Tooltip", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
+
+  it("has no axe violations while shown", async () => {
+    vi.useRealTimers(); // axe-core schedules its own timers
+    const { container, getByRole } = render(
+      <Tooltip content="Saves the note">
+        <button>Save</button>
+      </Tooltip>,
+    );
+    fireEvent.focus(getByRole("button"));
+    await expectNoAxeViolations(container);
+  });
 
   it("shows at once on focus and connects through aria-describedby", () => {
     const { getByRole } = render(
@@ -583,6 +604,20 @@ describe("Dialog", () => {
 describe("ToastRegion", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
+
+  it("has no axe violations", async () => {
+    vi.useRealTimers(); // axe-core schedules its own timers
+    const { container } = render(
+      <ToastRegion
+        onDismiss={() => undefined}
+        toasts={[
+          { id: "a", message: "Saved", tone: "success" },
+          { id: "b", message: "Write failed", tone: "danger" },
+        ]}
+      />,
+    );
+    await expectNoAxeViolations(container);
+  });
 
   it("announces errors as alerts and the rest as status", () => {
     const { getByRole } = render(
