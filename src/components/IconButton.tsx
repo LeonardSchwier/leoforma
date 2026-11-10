@@ -14,7 +14,9 @@ export interface IconButtonProps extends Omit<
    * Also used as the native tooltip. */
   label: string;
   size?: IconButtonSize;
-  /** Exposes a toggle's on state through `aria-pressed`. */
+  /** Makes this a toggle button and exposes its state through `aria-pressed`.
+   * Leave it out for an ordinary action: passing nothing renders no
+   * `aria-pressed`, so a screen reader does not announce a toggle. */
   active?: boolean;
   loading?: boolean;
 }
@@ -23,7 +25,7 @@ export function IconButton({
   icon,
   label,
   size = "sm",
-  active = false,
+  active,
   loading = false,
   disabled = false,
   type = "button",

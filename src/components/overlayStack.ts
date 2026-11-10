@@ -72,17 +72,28 @@ export function acquireScrollLock(): () => void {
 
 export const FOCUSABLE_SELECTOR = [
   "button:not(:disabled)",
-  "input:not(:disabled)",
+  'input:not(:disabled):not([type="hidden"])',
   "select:not(:disabled)",
   "textarea:not(:disabled)",
   "a[href]",
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
+const HIDDEN_ANCESTOR_SELECTOR = '[hidden], [inert], [aria-hidden="true"]';
+
+/** The tab stops inside `container`, in DOM order. Roving tabindex items
+ * (`tabindex="-1"`), hidden inputs and anything inside a hidden, inert or
+ * aria-hidden subtree are not tab stops, so they must not count as the first or
+ * last one. The hidden-ancestor check stops at `container`: a host may mount a
+ * dialog under an aria-hidden or inert root, which must not empty the list. */
 export function focusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(
     container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-  ).filter((element) => element.getAttribute("aria-hidden") !== "true");
+  ).filter((element) => {
+    if (element.tabIndex < 0) return false;
+    const hidden = element.closest(HIDDEN_ANCESTOR_SELECTOR);
+    return !(hidden && hidden !== container && container.contains(hidden));
+  });
 }
 
 let overlayIdCounter = 0;

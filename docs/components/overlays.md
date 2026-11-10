@@ -31,7 +31,7 @@ Rendered when you render it: the host owns open state and decides what `onDismis
 | `onDismiss` | `(reason: DialogDismissReason) => void` | yes |  |
 <!-- /props -->
 
-Accessibility: `role` is `dialog` or `alertdialog` with `aria-modal`, named by `title` and described by `description`. Focus moves in before paint (to `initialFocusRef`, else the first focusable element), Tab is trapped, Escape closes only the topmost overlay, and focus returns to the previous element unless `restoreFocus` is false. Page scroll is locked while open, reference counted for stacked dialogs. A host with a native back button can call `dismissTopOverlay("backbutton")` and subscribe with `onOverlayPush`.
+Accessibility: `role` is `dialog` or `alertdialog` with `aria-modal`, named by `title` and described by `description`. Focus moves in before paint (to `initialFocusRef`, else the first focusable element), Tab is trapped among the real tab stops (not `tabindex="-1"` options, hidden inputs, or `hidden`, `inert` and `aria-hidden` subtrees), Escape closes only the topmost overlay (an open `Menu` inside the dialog takes the first Escape, the dialog the next), and focus returns to the previous element unless `restoreFocus` is false. Page scroll is locked while open, reference counted for stacked dialogs. A host with a native back button can call `dismissTopOverlay("backbutton")` and subscribe with `onOverlayPush`.
 
 ## Sheet
 

@@ -824,3 +824,243 @@ describe("Sheet", () => {
     await expectNoAxeViolations(baseElement);
   });
 });
+
+describe("IconButton toggle semantics", () => {
+  it("is a plain button unless the host says it is a toggle", () => {
+    const { getByRole } = render(<IconButton icon={icon} label="Close" />);
+    expect(getByRole("button", { name: "Close" }).hasAttribute("aria-pressed")).toBe(false);
+  });
+
+  it("reports an explicit false as a toggle that is off", () => {
+    const { getByRole } = render(<IconButton icon={icon} label="Bold" active={false} />);
+    const button = getByRole("button", { name: "Bold" });
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(button.className).not.toContain("ds-icon-btn-active");
+  });
+
+  it("keeps the Sheet close control out of the toggle role", () => {
+    const { getByRole } = render(<Sheet title="Filters" onDismiss={() => {}} />);
+    expect(getByRole("button", { name: "Close" }).hasAttribute("aria-pressed")).toBe(false);
+  });
+});
+
+describe("Dialog focus trap", () => {
+  afterEach(() => resetOverlayStackForTests());
+
+  const tab = (shiftKey = false) =>
+    fireEvent.keyDown(document, { key: "Tab", shiftKey });
+  const options = [
+    { value: "a", label: "A" },
+    { value: "b", label: "B" },
+  ];
+
+  it("ignores roving tabindex=-1 options when it finds the last tab stop", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>Before</Button>
+        <SegmentedControl label="View" options={options} value="a" onChange={() => {}} />
+      </Dialog>,
+    );
+    const before = getByRole("button", { name: "Before" });
+    const a = getByRole("radio", { name: "A" });
+    a.focus();
+    expect(tab()).toBe(false); // wrapped by the trap, not left to the browser
+    expect(document.activeElement).toBe(before);
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(a); // B (tabindex -1) is not a tab stop
+  });
+
+  it("does not start on a tabindex=-1 element", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <button type="button" tabIndex={-1}>Skip</button>
+        <Button>Take</Button>
+      </Dialog>,
+    );
+    expect(document.activeElement).toBe(getByRole("button", { name: "Take" }));
+  });
+
+  it("skips hidden inputs and anything inside [hidden] or [inert]", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>Real</Button>
+        <div hidden>
+          <button type="button">Ghost</button>
+        </div>
+        <div inert={true}>
+          <button type="button">Inert</button>
+        </div>
+        <input type="hidden" name="token" value="x" />
+      </Dialog>,
+    );
+    const real = getByRole("button", { name: "Real" });
+    expect(document.activeElement).toBe(real);
+    expect(tab()).toBe(false);
+    expect(document.activeElement).toBe(real);
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(real);
+  });
+
+  it("wraps Shift+Tab to the last stop when the dialog surface itself has focus", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}} actions={<><Button>One</Button><Button>Two</Button></>} />,
+    );
+    getByRole("dialog").focus();
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(getByRole("button", { name: "Two" }));
+    getByRole("dialog").focus();
+    // Forward Tab from the surface reaches the first stop natively.
+    expect(tab()).toBe(true);
+  });
+
+  it("leaves Tab to the browser from a non-stop that still has a stop after it", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <button type="button" tabIndex={-1}>Roving</button>
+        <Button>After</Button>
+      </Dialog>,
+    );
+    getByRole("button", { name: "Roving" }).focus();
+    expect(tab()).toBe(true); // the browser moves on to "After"
+    expect(tab(true)).toBe(false); // nothing before it: wrap to the last stop
+    expect(document.activeElement).toBe(getByRole("button", { name: "After" }));
+  });
+
+  it("still traps when the host mounts it under an aria-hidden ancestor", () => {
+    const host = document.createElement("div");
+    host.setAttribute("aria-hidden", "true");
+    document.body.appendChild(host);
+    const { getByText } = render(
+      <Dialog title="T" onDismiss={() => {}} actions={<><Button>First</Button><Button>Last</Button></>} />,
+      { container: host },
+    );
+    // getByText, because Testing Library hides aria-hidden subtrees from getByRole.
+    getByText("Last").focus();
+    expect(tab()).toBe(false);
+    expect(document.activeElement).toBe(getByText("First"));
+  });
+});
+
+describe("Menu inside Dialog", () => {
+  afterEach(() => resetOverlayStackForTests());
+
+  function Harness({ onDismiss }: { onDismiss: () => void }) {
+    return (
+      <Dialog title="Note" onDismiss={onDismiss} actions={<Button>Done</Button>}>
+        <Menu
+          label="Note actions"
+          trigger="Actions"
+          items={[
+            { id: "rename", label: "Rename", onSelect: () => {} },
+            { id: "delete", label: "Delete", onSelect: () => {} },
+          ]}
+        />
+      </Dialog>
+    );
+  }
+
+  it("closes only the menu on Escape, then the dialog on the next Escape", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(<Harness onDismiss={onDismiss} />);
+    const trigger = getByRole("button", { name: "Note actions" });
+    fireEvent.click(trigger);
+    const item = getByRole("menuitem", { name: "Rename" });
+    expect(document.activeElement).toBe(item);
+
+    fireEvent.keyDown(item, { key: "Escape" });
+    expect(queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("still dismisses on Escape from ordinary dialog content", () => {
+    const onDismiss = vi.fn();
+    const { getByRole } = render(<Harness onDismiss={onDismiss} />);
+    fireEvent.keyDown(getByRole("button", { name: "Done" }), { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("keeps Tab inside the dialog when it leaves the last menu item", () => {
+    const { getByRole } = render(
+      <Dialog title="Note" onDismiss={() => {}}>
+        <Menu
+          label="Note actions"
+          trigger="Actions"
+          items={[{ id: "rename", label: "Rename", onSelect: () => {} }]}
+        />
+      </Dialog>,
+    );
+    const trigger = getByRole("button", { name: "Note actions" });
+    fireEvent.click(trigger);
+    const item = getByRole("menuitem", { name: "Rename" });
+    // Nothing tabbable follows the menu, so the trap wraps to the trigger.
+    expect(fireEvent.keyDown(item, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("keeps the dialog open when closeOnEscape is false and still closes the menu", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(
+      <Dialog title="Note" onDismiss={onDismiss} closeOnEscape={false}>
+        <Menu label="Note actions" trigger="Actions" items={[{ id: "a", label: "A", onSelect: () => {} }]} />
+      </Dialog>,
+    );
+    fireEvent.click(getByRole("button", { name: "Note actions" }));
+    fireEvent.keyDown(getByRole("menuitem", { name: "A" }), { key: "Escape" });
+    expect(queryByRole("menu")).toBeNull();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("works the same inside a Sheet", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(
+      <Sheet title="Note" onDismiss={onDismiss}>
+        <Menu label="Note actions" trigger="Actions" items={[{ id: "a", label: "A", onSelect: () => {} }]} />
+      </Sheet>,
+    );
+    fireEvent.click(getByRole("button", { name: "Note actions" }));
+    fireEvent.keyDown(getByRole("menuitem", { name: "A" }), { key: "Escape" });
+    expect(queryByRole("menu")).toBeNull();
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("does not leak the menu's Escape to document listeners", () => {
+    const onDocumentKey = vi.fn();
+    document.addEventListener("keydown", onDocumentKey);
+    try {
+      const { getByRole } = render(<Harness onDismiss={() => {}} />);
+      fireEvent.click(getByRole("button", { name: "Note actions" }));
+      onDocumentKey.mockClear();
+      fireEvent.keyDown(getByRole("menuitem", { name: "Rename" }), { key: "Escape" });
+      expect(onDocumentKey).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener("keydown", onDocumentKey);
+    }
+  });
+
+  it("does not hand Escape to a foreign role=menu that cannot handle it", () => {
+    const onDismiss = vi.fn();
+    const { getByRole } = render(
+      <Dialog title="Note" onDismiss={onDismiss}>
+        <ul role="menu" aria-label="Static actions">
+          <li role="none">
+            <button type="button" role="menuitem">Copy</button>
+          </li>
+        </ul>
+      </Dialog>,
+    );
+    fireEvent.keyDown(getByRole("menuitem", { name: "Copy" }), { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("has no axe violations with the menu open", async () => {
+    const { getByRole, baseElement } = render(<Harness onDismiss={() => {}} />);
+    fireEvent.click(getByRole("button", { name: "Note actions" }));
+    await expectNoAxeViolations(baseElement);
+  });
+});

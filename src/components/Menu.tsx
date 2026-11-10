@@ -139,7 +139,10 @@ export function Menu({
     const menu = menuRef.current;
     if (!menu) return;
     if (event.key === "Escape") {
+      // The menu consumes the key, so neither an enclosing Dialog nor a host's
+      // document listener also reacts to the same press.
       event.preventDefault();
+      event.stopPropagation();
       close(true);
       return;
     }
@@ -202,6 +205,7 @@ export function Menu({
           ref={menuRef}
           id={idRef.current}
           class="ds-menu"
+          data-ds-menu=""
           role="menu"
           aria-label={label}
           style={

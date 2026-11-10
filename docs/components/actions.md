@@ -32,11 +32,11 @@ An icon-only button. Also accepts native button attributes.
 | `icon` | `ComponentChildren` | yes | The glyph, for example an `Icon`. |
 | `label` | `string` | yes | Required: an icon alone gives assistive technology nothing to announce. Also used as the native tooltip. |
 | `size` | `IconButtonSize` | no |  |
-| `active` | `boolean` | no | Exposes a toggle's on state through `aria-pressed`. |
+| `active` | `boolean` | no | Makes this a toggle button and exposes its state through `aria-pressed`. Leave it out for an ordinary action: passing nothing renders no `aria-pressed`, so a screen reader does not announce a toggle. |
 | `loading` | `boolean` | no |  |
 <!-- /props -->
 
-Accessibility: `label` is required and becomes `aria-label`; `active` exposes a toggle state through `aria-pressed`.
+Accessibility: `label` is required and becomes `aria-label`. `active` makes the button a toggle and exposes its state through `aria-pressed`; leave it out for an ordinary action and no `aria-pressed` is rendered, so a screen reader does not announce a toggle. Pass an explicit boolean for a real toggle, `active={false}` included.
 
 ## Spinner
 

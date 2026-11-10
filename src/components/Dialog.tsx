@@ -31,6 +31,35 @@ export interface DialogProps {
   onDismiss: (reason: DialogDismissReason) => void;
 }
 
+/** Where the trap must send focus for this Tab press, or null when the
+ * browser's own move already stays inside the dialog. */
+function tabWrapTarget(
+  surface: HTMLElement,
+  stops: readonly HTMLElement[],
+  active: HTMLElement | null,
+  backwards: boolean,
+): HTMLElement | null {
+  const first = stops[0]!;
+  const last = stops[stops.length - 1]!;
+  if (!active || !surface.contains(active)) return backwards ? last : first;
+  const index = stops.indexOf(active);
+  if (index >= 0) {
+    if (backwards) return index === 0 ? last : null;
+    return index === stops.length - 1 ? first : null;
+  }
+  // Focus is on something that is not a tab stop: the surface itself, a
+  // roving-tabindex option, a menu item. The browser steps to the neighbouring
+  // stop, so wrap only when there is none in that direction.
+  const direction = backwards
+    ? Node.DOCUMENT_POSITION_PRECEDING
+    : Node.DOCUMENT_POSITION_FOLLOWING;
+  const hasNeighbour = stops.some(
+    (stop) => active.compareDocumentPosition(stop) & direction,
+  );
+  if (hasNeighbour) return null;
+  return backwards ? last : first;
+}
+
 /** A modal dialog with a focus trap, Escape handling that respects stacking,
  * focus restoration, and a body scroll lock. Mount to open, unmount to close. */
 export function Dialog({
@@ -82,13 +111,22 @@ export function Dialog({
 
     function onDocumentKeyDown(event: KeyboardEvent) {
       if (!isTopmostOverlay(instanceId)) return;
+      const current = surfaceRef.current;
       if (event.key === "Escape") {
+        // An open Menu inside this dialog owns Escape: it closes itself,
+        // returns focus to its trigger and stops the event, and the next Escape
+        // reaches the dialog. Only the library's own Menu is matched (it renders
+        // inline and carries data-ds-menu), because a foreign role="menu" may
+        // not handle Escape at all and would make the dialog impossible to
+        // close from the keyboard. Making Menu an overlay stack entry would be
+        // the more general fix, but it changes what a host's back handler sees.
+        const menu = (event.target as Element | null)?.closest?.("[data-ds-menu]");
+        if (menu && current?.contains(menu)) return;
         event.preventDefault();
         event.stopPropagation();
         if (closeOnEscapeRef.current) dismissRef.current("escape");
         return;
       }
-      const current = surfaceRef.current;
       if (event.key !== "Tab" || !current) return;
 
       const available = focusableElements(current);
@@ -97,18 +135,15 @@ export function Dialog({
         current.focus();
         return;
       }
-      const first = available[0]!;
-      const last = available[available.length - 1]!;
-      const active = document.activeElement as HTMLElement | null;
-      if (event.shiftKey && (active === first || !current.contains(active))) {
+      const target = tabWrapTarget(
+        current,
+        available,
+        document.activeElement as HTMLElement | null,
+        event.shiftKey,
+      );
+      if (target) {
         event.preventDefault();
-        last.focus();
-      } else if (
-        !event.shiftKey &&
-        (active === last || !current.contains(active))
-      ) {
-        event.preventDefault();
-        first.focus();
+        target.focus();
       }
     }
 
