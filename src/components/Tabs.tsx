@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useRef } from "preact/hooks";
 import { cx } from "./cx";
-import { nextRovingIndex } from "./rovingKeys";
+import { nextRovingIndex, rovingTabStop } from "./rovingKeys";
 
 export interface TabItem {
   id: string;
@@ -36,13 +36,13 @@ export function Tabs({ label, items, value, onChange, className }: TabsProps): J
     items.findIndex((item) => item.id === value),
   );
   const selected = items[selectedIndex];
+  const enabled = items.map((item) => !item.disabled);
+  // Usually the selected tab. A disabled selection cannot hold focus, so the
+  // stop moves to the first enabled tab and arrows start from there.
+  const tabStop = rovingTabStop(selectedIndex, enabled);
 
   function onKeyDown(event: JSX.TargetedKeyboardEvent<HTMLDivElement>) {
-    const next = nextRovingIndex(
-      event.key,
-      selectedIndex,
-      items.map((item) => !item.disabled),
-    );
+    const next = nextRovingIndex(event.key, tabStop, enabled);
     if (next === null) return;
     event.preventDefault();
     onChange(items[next]!.id);
@@ -70,7 +70,7 @@ export function Tabs({ label, items, value, onChange, className }: TabsProps): J
             aria-controls={
               index === selectedIndex ? `${baseId}-panel-${item.id}` : undefined
             }
-            tabIndex={index === selectedIndex ? 0 : -1}
+            tabIndex={index === tabStop ? 0 : -1}
             disabled={item.disabled}
             onClick={() => onChange(item.id)}
           >

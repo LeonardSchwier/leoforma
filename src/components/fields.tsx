@@ -79,6 +79,7 @@ export function Input({
   id,
   className,
   "aria-describedby": describedBy,
+  "aria-invalid": ariaInvalid,
   ...rest
 }: InputProps): JSX.Element {
   const resolved = useFieldId(id as string | undefined);
@@ -90,7 +91,7 @@ export function Input({
         id={ids.id}
         class={cx("ds-input", className as string | undefined)}
         aria-describedby={ids.describedBy}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={error ? true : ariaInvalid}
       />
     </Field>
   );
@@ -106,6 +107,7 @@ export function Textarea({
   id,
   className,
   "aria-describedby": describedBy,
+  "aria-invalid": ariaInvalid,
   ...rest
 }: TextareaProps): JSX.Element {
   const resolved = useFieldId(id as string | undefined);
@@ -117,7 +119,7 @@ export function Textarea({
         id={ids.id}
         class={cx("ds-textarea", className as string | undefined)}
         aria-describedby={ids.describedBy}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={error ? true : ariaInvalid}
       />
     </Field>
   );
@@ -144,6 +146,7 @@ export function Select({
   className,
   options,
   "aria-describedby": describedBy,
+  "aria-invalid": ariaInvalid,
   ...rest
 }: SelectProps): JSX.Element {
   const resolved = useFieldId(id as string | undefined);
@@ -155,7 +158,7 @@ export function Select({
         id={ids.id}
         class={cx("ds-select", className as string | undefined)}
         aria-describedby={ids.describedBy}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={error ? true : ariaInvalid}
       >
         {options.map((option) => (
           <option

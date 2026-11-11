@@ -25,3 +25,19 @@ export function nextRovingIndex(
   }
   return null;
 }
+
+/**
+ * The index that owns the group's single tab stop: the selected item, or the
+ * first enabled one when the selection is disabled or missing. A disabled
+ * button cannot take focus, so leaving the stop on it would make the whole
+ * group unreachable by keyboard. When nothing is enabled the stop stays on the
+ * selected item (or the first), since there is nothing better to point at.
+ */
+export function rovingTabStop(
+  selected: number,
+  enabled: readonly boolean[],
+): number {
+  if (selected >= 0 && enabled[selected]) return selected;
+  const firstEnabled = enabled.indexOf(true);
+  return firstEnabled >= 0 ? firstEnabled : Math.max(0, selected);
+}

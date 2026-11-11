@@ -4,6 +4,9 @@ Versions follow [semver](https://semver.org). Release tags are `vMAJOR.MINOR.PAT
 
 ## Unreleased
 
+- Fixed: `Tabs` and `SegmentedControl` put their single tab stop on the selected item even when it was disabled (or, for `SegmentedControl`, when the value matched nothing and the first option was disabled). A disabled button cannot take focus, so the whole group was unreachable by keyboard. The stop now falls back to the first enabled item and arrow keys start from it.
+- Fixed: an open `Menu` stayed open, with nothing to dismiss it but Escape or a click elsewhere, when its `disabled` prop turned true or its `items` became empty. It now closes.
+- Fixed: `Input`, `Textarea` and `Select` discarded a host's own `aria-invalid` when no `error` text was set. `error` still wins and forces `aria-invalid="true"`.
 - Fixed: `IconButton` rendered `aria-pressed="false"` when `active` was not passed, so every icon button was announced as a toggle. `aria-pressed` is now only rendered when `active` is a boolean. A host that relied on the old attribute for a non-toggle button should pass `active={false}`, or better, drop it. A toggle that passes `active={maybeUndefined}` loses `aria-pressed` until the value is a boolean.
 - Fixed: the `Dialog` and `Sheet` focus trap counted `tabindex="-1"` options (inactive `Tabs` and `SegmentedControl` items), hidden inputs and `hidden`, `inert` or `aria-hidden` subtrees as tab stops, so Tab could leave the dialog; Shift+Tab from the dialog surface could too.
 - Fixed: Escape on an open `Menu` inside a `Dialog` or `Sheet` closed the whole dialog. The menu now closes first and the next Escape closes the dialog. `Menu` now stops the Escape event it handles, so a host's own `document` Escape listener no longer sees that press either. The dialog only defers to Leoforma's `Menu`, never to a foreign `role="menu"`.

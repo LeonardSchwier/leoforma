@@ -27,6 +27,7 @@ import {
   ToastRegion,
   Tooltip,
 } from "../src";
+import { rovingTabStop } from "../src/components/rovingKeys";
 import { expectNoAxeViolations } from "./axeCheck";
 
 const icon = <svg aria-hidden="true" width="16" height="16" />;
@@ -1062,5 +1063,170 @@ describe("Menu inside Dialog", () => {
     const { getByRole, baseElement } = render(<Harness onDismiss={() => {}} />);
     fireEvent.click(getByRole("button", { name: "Note actions" }));
     await expectNoAxeViolations(baseElement);
+  });
+});
+
+describe("roving tab stop when the selection is disabled", () => {
+  const tabItems = [
+    { id: "a", label: "One", panel: "Panel one", disabled: true },
+    { id: "b", label: "Two", panel: "Panel two" },
+    { id: "c", label: "Three", panel: "Panel three" },
+  ];
+
+  it("Tabs keeps the one tab stop on an enabled tab", () => {
+    const { getAllByRole } = render(
+      <Tabs label="Sections" value="a" onChange={() => {}} items={tabItems} />,
+    );
+    const tabs = getAllByRole("tab") as HTMLButtonElement[];
+    // A disabled button cannot take focus: a stop on it would leave the whole
+    // group unreachable by keyboard.
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([-1, 0, -1]);
+    expect(tabs[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("Tabs with a disabled selection has no axe violations", async () => {
+    const { container } = render(
+      <Tabs label="Sections" value="a" onChange={() => {}} items={tabItems} />,
+    );
+    await expectNoAxeViolations(container);
+  });
+
+  it("Tabs arrows start from the tab stop, not from the disabled selection", () => {
+    const onChange = vi.fn();
+    const { getByRole } = render(
+      <Tabs label="Sections" value="a" onChange={onChange} items={tabItems} />,
+    );
+    const two = getByRole("tab", { name: "Two" });
+    two.focus();
+    fireEvent.keyDown(two, { key: "ArrowRight" });
+    expect(onChange).toHaveBeenLastCalledWith("c");
+  });
+
+  it("Tabs keeps the stop on the selected tab while it is enabled", () => {
+    const { getAllByRole } = render(
+      <Tabs label="Sections" value="c" onChange={() => {}} items={tabItems} />,
+    );
+    expect(getAllByRole("tab").map((tab) => tab.tabIndex)).toEqual([-1, -1, 0]);
+  });
+
+  it("SegmentedControl keeps the one tab stop on an enabled option", () => {
+    const options = [
+      { value: "a", label: "A", disabled: true },
+      { value: "b", label: "B" },
+      { value: "c", label: "C" },
+    ];
+    const noMatch = render(
+      <SegmentedControl label="Mode" value={"none" as "a"} options={options} onChange={() => {}} />,
+    );
+    expect(noMatch.getAllByRole("radio").map((radio) => radio.tabIndex)).toEqual([-1, 0, -1]);
+    noMatch.unmount();
+
+    const disabledSelected = render(
+      <SegmentedControl label="Mode" value="a" options={options} onChange={() => {}} />,
+    );
+    expect(
+      disabledSelected.getAllByRole("radio").map((radio) => radio.tabIndex),
+    ).toEqual([-1, 0, -1]);
+  });
+
+  it("SegmentedControl arrows start from the tab stop", () => {
+    const onChange = vi.fn();
+    const options = [
+      { value: "a", label: "A", disabled: true },
+      { value: "b", label: "B" },
+      { value: "c", label: "C" },
+    ];
+    const { getByRole } = render(
+      <SegmentedControl label="Mode" value="a" options={options} onChange={onChange} />,
+    );
+    const b = getByRole("radio", { name: "B" });
+    b.focus();
+    fireEvent.keyDown(b, { key: "ArrowRight" });
+    expect(onChange).toHaveBeenLastCalledWith("c");
+  });
+});
+
+describe("Menu that becomes unavailable while open", () => {
+  const items = [{ id: "a", label: "Rename", onSelect: () => {} }];
+
+  it("closes when the menu gets disabled", () => {
+    const { getByRole, queryByRole, rerender } = render(
+      <Menu label="Actions" trigger="More" items={items} />,
+    );
+    fireEvent.click(getByRole("button", { name: "Actions" }));
+    expect(queryByRole("menu")).not.toBeNull();
+    rerender(<Menu label="Actions" trigger="More" items={items} disabled />);
+    expect(queryByRole("menu")).toBeNull();
+    expect(getByRole("button", { name: "Actions" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("closes when its items run out", () => {
+    const { getByRole, queryByRole, rerender } = render(
+      <Menu label="Actions" trigger="More" items={items} />,
+    );
+    fireEvent.click(getByRole("button", { name: "Actions" }));
+    expect(queryByRole("menu")).not.toBeNull();
+    rerender(<Menu label="Actions" trigger="More" items={[]} />);
+    expect(queryByRole("menu")).toBeNull();
+  });
+
+  it("opens again once it is available", () => {
+    const { getByRole, queryByRole, rerender } = render(
+      <Menu label="Actions" trigger="More" items={items} />,
+    );
+    fireEvent.click(getByRole("button", { name: "Actions" }));
+    rerender(<Menu label="Actions" trigger="More" items={items} disabled />);
+    rerender(<Menu label="Actions" trigger="More" items={items} />);
+    expect(queryByRole("menu")).toBeNull();
+    fireEvent.click(getByRole("button", { name: "Actions" }));
+    expect(queryByRole("menu")).not.toBeNull();
+  });
+});
+
+describe("aria-invalid passed by the host", () => {
+  it("survives on Input, Textarea and Select when there is no error text", () => {
+    const { getByLabelText } = render(
+      <>
+        <Input label="Name" aria-invalid="true" />
+        <Textarea label="Notes" aria-invalid="true" />
+        <Select
+          label="Folder"
+          aria-invalid="true"
+          options={[{ value: "a", label: "A" }]}
+        />
+      </>,
+    );
+    for (const name of ["Name", "Notes", "Folder"]) {
+      expect(getByLabelText(name).getAttribute("aria-invalid")).toBe("true");
+    }
+  });
+
+  it("is still set by `error`, which wins, and absent otherwise", () => {
+    const { getByLabelText } = render(
+      <>
+        <Input label="Name" error="Required" aria-invalid="false" />
+        <Input label="Plain" />
+      </>,
+    );
+    expect(getByLabelText("Name").getAttribute("aria-invalid")).toBe("true");
+    expect(getByLabelText("Plain").hasAttribute("aria-invalid")).toBe(false);
+  });
+});
+
+describe("rovingTabStop", () => {
+  it("keeps the selected item while it is enabled", () => {
+    expect(rovingTabStop(2, [true, true, true])).toBe(2);
+  });
+
+  it("falls back to the first enabled item for a disabled or missing selection", () => {
+    expect(rovingTabStop(0, [false, true, true])).toBe(1);
+    expect(rovingTabStop(-1, [false, true])).toBe(1);
+    expect(rovingTabStop(-1, [true, true])).toBe(0);
+  });
+
+  it("stays on the selection, or the first item, when nothing is enabled", () => {
+    expect(rovingTabStop(1, [false, false])).toBe(1);
+    expect(rovingTabStop(-1, [false, false])).toBe(0);
+    expect(rovingTabStop(-1, [])).toBe(0);
   });
 });

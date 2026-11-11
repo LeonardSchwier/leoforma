@@ -112,6 +112,13 @@ export function Menu({
     target?.focus();
   }, [align, open]);
 
+  // A disabled trigger or an empty list cannot be reopened, so an already open
+  // menu must not linger. Focus is not moved: the trigger cannot take it.
+  const unavailable = disabled || items.length === 0;
+  useEffect(() => {
+    if (open && unavailable) close(false);
+  }, [open, unavailable]);
+
   useEffect(() => {
     if (!open) return;
     function dismissOnPointer(event: PointerEvent) {

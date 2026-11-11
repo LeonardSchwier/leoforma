@@ -33,7 +33,7 @@ Each item:
 | `disabled` | `boolean` | no |  |
 <!-- /props -->
 
-Accessibility: `tablist`, `tab` and `tabpanel` roles with `aria-selected`, `aria-controls` and `aria-labelledby`. Arrow keys, Home and End move focus between enabled tabs.
+Accessibility: `tablist`, `tab` and `tabpanel` roles with `aria-selected`, `aria-controls` and `aria-labelledby`. Arrow keys, Home and End move focus between enabled tabs. The group has one tab stop: the selected tab, or the first enabled tab when the selected one is disabled, so the tabs stay reachable by keyboard.
 
 ## SegmentedControl
 
@@ -57,7 +57,7 @@ Each option:
 | `disabled` | `boolean` | no |  |
 <!-- /props -->
 
-Accessibility: a `radiogroup` of `radio` buttons named by `label`, with the same roving arrow-key behaviour as tabs.
+Accessibility: a `radiogroup` of `radio` buttons named by `label`, with the same roving arrow-key behaviour and single tab stop as tabs (the first enabled option when the value matches nothing or a disabled option).
 
 ## Menu
 
@@ -88,4 +88,4 @@ Each item:
 | `variant` | `MenuItemVariant` | no |  |
 <!-- /props -->
 
-Accessibility: the trigger has `aria-haspopup="menu"`, `aria-expanded` and `aria-controls`. ArrowDown or ArrowUp on the trigger opens the menu; inside, arrows, Home and End move between enabled items, Escape closes, Tab closes. A disabled item can explain itself through `disabledReason`, connected with `aria-describedby`.
+Accessibility: the trigger has `aria-haspopup="menu"`, `aria-expanded` and `aria-controls`. ArrowDown or ArrowUp on the trigger opens the menu; inside, arrows, Home and End move between enabled items, Escape closes, Tab closes. A disabled item can explain itself through `disabledReason`, connected with `aria-describedby`. An open menu closes if the menu becomes `disabled` or its `items` become empty.

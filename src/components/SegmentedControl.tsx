@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useRef } from "preact/hooks";
 import { cx } from "./cx";
-import { nextRovingIndex } from "./rovingKeys";
+import { nextRovingIndex, rovingTabStop } from "./rovingKeys";
 
 export interface SegmentedOption<V extends string> {
   value: V;
@@ -29,14 +29,13 @@ export function SegmentedControl<V extends string>({
 }: SegmentedControlProps<V>): JSX.Element {
   const groupRef = useRef<HTMLDivElement>(null);
   const selectedIndex = options.findIndex((option) => option.value === value);
-  const tabStop = selectedIndex >= 0 ? selectedIndex : 0;
+  const enabled = options.map((option) => !option.disabled);
+  // The selected option, or the first enabled one when the value matches
+  // nothing or the match is disabled, so the group always has a reachable stop.
+  const tabStop = rovingTabStop(selectedIndex, enabled);
 
   function onKeyDown(event: JSX.TargetedKeyboardEvent<HTMLDivElement>) {
-    const next = nextRovingIndex(
-      event.key,
-      tabStop,
-      options.map((option) => !option.disabled),
-    );
+    const next = nextRovingIndex(event.key, tabStop, enabled);
     if (next === null) return;
     event.preventDefault();
     onChange(options[next]!.value);

@@ -28,4 +28,4 @@ Adds an options list:
 | `disabled` | `boolean` | no |  |
 <!-- /props -->
 
-Accessibility: the visible `label` is tied to the control with `for`; `hint` and `error` are connected through `aria-describedby`; a non-empty `error` sets `aria-invalid`. Ids are generated unless you pass `id`. `Switch` is a native checkbox with `role="switch"`, so Space and form submission behave natively.
+Accessibility: the visible `label` is tied to the control with `for`; `hint` and `error` are connected through `aria-describedby`; a non-empty `error` sets `aria-invalid="true"`, and without one a host-supplied `aria-invalid` is kept. Ids are generated unless you pass `id`. `Switch` is a native checkbox with `role="switch"`, so Space and form submission behave natively.
