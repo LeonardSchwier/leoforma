@@ -70,7 +70,7 @@ Screenshots are generated from the repository's own gallery page (`site/`) with 
 
 ## Accessibility
 
-Every component has a vitest test and an axe-core check (`test/axeCheck.ts`, used throughout `test/components.test.tsx`); per-component notes are in [docs/components](docs/components/README.md). axe cannot judge colour contrast in jsdom, so `test/contrast.test.ts` checks every text, accent and focus colour pair of both themes in light and dark against WCAG 2.1 AA (4.5 for text, 3 for focus rings and control borders). Overlays trap focus and respect Escape and stacking; motion collapses under `prefers-reduced-motion`.
+Every component has a vitest test and an axe-core check (`test/axeCheck.ts`, used throughout `test/components.test.tsx`); per-component notes are in [docs/components](docs/components/README.md). axe cannot judge colour contrast in jsdom, so `test/contrast.test.ts` checks every text, accent and focus colour pair of both themes in light and dark against WCAG 2.1 AA (4.5 for text, 3 for focus rings and control borders). Overlays trap focus and respect Escape and stacking; motion collapses under `prefers-reduced-motion`. In forced-colors mode (Windows High Contrast) the Switch, a pressed toggle IconButton, the selected Tab and the selected SegmentedControl option stay distinguishable through system colors; `test/forcedColors.test.ts` requires a rule for every state selector. That rendering was checked in Chromium with `forcedColors: "active"`, not on Windows with assistive technology.
 
 ## Design tokens
 

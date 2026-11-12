@@ -1,6 +1,8 @@
 /* Component styles. Every value resolves to a token, so a theme or mode change
- * needs no component rule of its own. Classes carry a ds- prefix to stay clear
- * of whatever the host application already defines. */
+ * needs no component rule of its own, except the forced-colors block at the end,
+ * which uses system color keywords because the browser ignores tokens there.
+ * Classes carry a ds- prefix to stay clear of whatever the host application
+ * already defines. */
 
 .ds-btn,
 .ds-icon-btn,
@@ -686,4 +688,62 @@
 .ds-menu-item:focus-visible,
 .ds-segmented-option:focus-visible {
   outline-offset: -2px;
+}
+
+/* Forced colors (Windows High Contrast). The browser replaces every author
+ * color with a system color and drops shadows, so a state shown only by a
+ * background fill disappears: a Switch is an empty pill on or off, a pressed
+ * toggle looks unpressed, and every tab keeps its underline. These rules restate
+ * each state in system colors, which the browser keeps. Every state selector in
+ * this file needs a counterpart here: test/forcedColors.test.ts enforces it.
+ *
+ * The pressed IconButton and the selected SegmentedControl option put text on a
+ * Highlight fill. Chromium paints a Canvas-colored backplate behind text on an
+ * author fill, which would make HighlightText white on white, so those two opt
+ * out of forced-color-adjust. That hands every color on the element back to the
+ * author, so each one that shows (outline, separator) is restated. */
+@media (forced-colors: active) {
+  .ds-switch-input::before {
+    background: CanvasText;
+  }
+  .ds-switch-input:checked {
+    background: Highlight;
+    border-color: Highlight;
+  }
+  .ds-switch-input:checked::before {
+    background: HighlightText;
+  }
+
+  .ds-icon-btn-active,
+  .ds-icon-btn-active:not(:disabled):hover {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+  /* The ring sits outside the fill, on the canvas. */
+  .ds-icon-btn-active:focus-visible {
+    outline-color: Highlight;
+  }
+
+  /* Forced colors turn the transparent underline into a visible one, so the
+   * unselected tab hides it against the canvas and the selected tab shows it. */
+  .ds-tab {
+    border-bottom-color: Canvas;
+  }
+  .ds-tab[aria-selected="true"] {
+    border-bottom-color: Highlight;
+  }
+
+  .ds-segmented-option[aria-checked="true"],
+  .ds-segmented-option[aria-checked="true"]:not(:disabled):hover {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+    border-right-color: CanvasText;
+  }
+  /* The ring is inset, inside the fill, and is painted in Highlight, which is
+   * now the fill, so it takes the text color to stay visible. */
+  .ds-segmented-option[aria-checked="true"]:focus-visible {
+    outline-color: HighlightText;
+  }
 }

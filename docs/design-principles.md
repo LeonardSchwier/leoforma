@@ -14,6 +14,7 @@ Every visual decision (colour, space, radius, type, motion, stacking) is a token
 - Keyboard behaviour follows the WAI-ARIA patterns (roving focus in tabs and segmented controls, arrow keys in menus, focus trap and Escape in dialogs).
 - Status is never colour alone: `StatusIndicator` always shows text.
 - Motion collapses to 1ms under `prefers-reduced-motion`.
+- Selected, checked and pressed states survive forced-colors mode (Windows High Contrast), where background fills disappear: [`test/forcedColors.test.ts`](../test/forcedColors.test.ts) fails when a state selector in `components.css` has no `forced-colors` counterpart.
 
 axe finds a subset of problems. Passing it is not a claim of full WCAG conformance; screen reader behaviour has not been tested manually in this repository.
 
