@@ -33,10 +33,14 @@ function Toast({
   const tone = toast.tone ?? "neutral";
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
-  const [paused, setPaused] = useState(false);
+  // Hover and focus are separate reasons to hold the timer, so a slow reader or
+  // a keyboard user on the close button does not lose the message (WCAG 2.2.1).
+  // One shared flag let the pointer leaving resume the timer under a focused
+  // keyboard user, and the toast then vanished with focus still on it.
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const paused = hovered || focused;
 
-  // Hover and focus pause the timer, so a slow reader or a keyboard user on
-  // the close button does not lose the message (WCAG 2.2.1).
   useEffect(() => {
     if (toast.duration === undefined || paused) return;
     const timer = setTimeout(() => dismissRef.current(toast.id), toast.duration);
@@ -48,10 +52,14 @@ function Toast({
       class={`ds-toast ds-toast-${tone}`}
       // Errors interrupt; everything else waits for a pause in speech.
       role={tone === "danger" ? "alert" : "status"}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusIn={() => setPaused(true)}
-      onFocusOut={() => setPaused(false)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocusIn={() => setFocused(true)}
+      onFocusOut={(event) => {
+        // Focus moving to another control inside the toast is still focus inside.
+        const next = event.relatedTarget as Node | null;
+        if (!next || !event.currentTarget.contains(next)) setFocused(false);
+      }}
     >
       <div class="ds-toast-message">{toast.message}</div>
       <Button variant="ghost" size="sm" onClick={() => onDismiss(toast.id)}>

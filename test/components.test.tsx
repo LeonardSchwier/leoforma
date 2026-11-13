@@ -737,6 +737,72 @@ describe("ToastRegion", () => {
     expect(onDismiss).toHaveBeenCalledWith("a");
   });
 
+  // Hover and focus are independent reasons to hold a toast (WCAG 2.2.1): the
+  // pointer leaving must not resume the timer under a keyboard user who is still
+  // on the toast, and focus leaving must not resume it under a hovering pointer.
+  it("stays paused while focus is inside, even after the pointer enters and leaves", () => {
+    const onDismiss = vi.fn();
+    const { getByRole } = render(
+      <ToastRegion
+        onDismiss={onDismiss}
+        toasts={[{ id: "a", message: "Saved", duration: 1000 }]}
+      />,
+    );
+    const toast = getByRole("status");
+    const dismiss = getByRole("button", { name: "Dismiss" });
+    fireEvent.focusIn(dismiss);
+    fireEvent.mouseEnter(toast);
+    fireEvent.mouseLeave(toast);
+    vi.advanceTimersByTime(5000);
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.focusOut(dismiss);
+    vi.advanceTimersByTime(1000);
+    expect(onDismiss).toHaveBeenCalledWith("a");
+  });
+
+  it("stays paused while hovered, even after focus leaves", () => {
+    const onDismiss = vi.fn();
+    const { getByRole } = render(
+      <ToastRegion
+        onDismiss={onDismiss}
+        toasts={[{ id: "a", message: "Saved", duration: 1000 }]}
+      />,
+    );
+    const toast = getByRole("status");
+    const dismiss = getByRole("button", { name: "Dismiss" });
+    fireEvent.mouseEnter(toast);
+    fireEvent.focusIn(dismiss);
+    fireEvent.focusOut(dismiss);
+    vi.advanceTimersByTime(5000);
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.mouseLeave(toast);
+    vi.advanceTimersByTime(1000);
+    expect(onDismiss).toHaveBeenCalledWith("a");
+  });
+
+  it("stays paused while focus moves between controls inside the toast", () => {
+    const onDismiss = vi.fn();
+    const { getByRole } = render(
+      <ToastRegion
+        onDismiss={onDismiss}
+        toasts={[
+          {
+            id: "a",
+            message: <a href="#undo">Undo</a>,
+            duration: 1000,
+          },
+        ]}
+      />,
+    );
+    const link = getByRole("link", { name: "Undo" });
+    const dismiss = getByRole("button", { name: "Dismiss" });
+    fireEvent.focusIn(link);
+    fireEvent.focusOut(link, { relatedTarget: dismiss });
+    fireEvent.focusIn(dismiss);
+    vi.advanceTimersByTime(5000);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it("keeps the region mounted while empty, so later toasts are announced", () => {
     const { getByRole } = render(<ToastRegion onDismiss={() => undefined} toasts={[]} />);
     expect(getByRole("region", { name: "Notifications" })).toBeTruthy();
