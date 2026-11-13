@@ -104,13 +104,24 @@ export function Menu({
     );
 
     setPosition({ left, top, maxHeight });
+  }, [align, open]);
+
+  // Focus moves in only once the menu is visible. While it is being measured it
+  // renders with visibility:hidden, and a browser refuses focus() on a hidden
+  // element, so focusing in the measuring pass above left the keyboard on the
+  // trigger (jsdom does not enforce this, which is how it went unnoticed). Keyed
+  // on `positioned`, not on `position`, so re-positioning an open menu (an
+  // `align` change) does not pull focus back to an edge item.
+  const positioned = position !== null;
+  useLayoutEffect(() => {
+    if (!open || !positioned || !menuRef.current) return;
     const available = enabledItems(menuRef.current);
     const target =
       focusEdgeRef.current === "last"
         ? available[available.length - 1]
         : available[0];
     target?.focus();
-  }, [align, open]);
+  }, [open, positioned]);
 
   // A disabled trigger or an empty list cannot be reopened, so an already open
   // menu must not linger. Focus is not moved: the trigger cannot take it.

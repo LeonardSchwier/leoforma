@@ -369,11 +369,18 @@ describe("Tooltip", () => {
   });
 });
 
-function MenuHarness({ onDelete }: { onDelete?: () => void }) {
+function MenuHarness({
+  onDelete,
+  align,
+}: {
+  onDelete?: () => void;
+  align?: "start" | "end";
+}) {
   return (
     <Menu
       label="Note actions"
       trigger="More"
+      align={align}
       items={[
         { id: "rename", label: "Rename", onSelect: () => undefined },
         {
@@ -409,6 +416,61 @@ describe("Menu", () => {
     const { getByRole } = render(<MenuHarness />);
     fireEvent.keyDown(getByRole("button"), { key: "ArrowUp" });
     expect(document.activeElement).toBe(getByRole("menuitem", { name: "Delete" }));
+  });
+
+  // Browsers refuse focus() on anything under visibility:hidden, but jsdom does
+  // not, so this emulates the rule. The menu renders hidden until it has been
+  // measured and positioned; moving focus in that first pass silently did
+  // nothing in Chromium and left the keyboard on the trigger.
+  describe("focus while the menu is positioned", () => {
+    function refuseFocusWhileHidden() {
+      const nativeFocus = HTMLElement.prototype.focus;
+      vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (
+        this: HTMLElement,
+        options?: FocusOptions,
+      ) {
+        // Computed style, not the attribute text, so the emulation still
+        // applies if the hiding ever moves into a class.
+        if (getComputedStyle(this).visibility === "hidden") return;
+        nativeFocus.call(this, options);
+      });
+    }
+
+    it("moves focus to the first enabled item on click", () => {
+      refuseFocusWhileHidden();
+      const { getByRole } = render(<MenuHarness />);
+      fireEvent.click(getByRole("button", { name: "Note actions" }));
+      expect(getByRole("menu").style.visibility).toBe("visible");
+      expect(document.activeElement).toBe(getByRole("menuitem", { name: "Rename" }));
+    });
+
+    it("moves focus to the last enabled item on ArrowUp", () => {
+      refuseFocusWhileHidden();
+      const { getByRole } = render(<MenuHarness />);
+      fireEvent.keyDown(getByRole("button"), { key: "ArrowUp" });
+      expect(document.activeElement).toBe(getByRole("menuitem", { name: "Delete" }));
+    });
+
+    it("moves focus in again when the menu is closed and reopened", () => {
+      refuseFocusWhileHidden();
+      const { getByRole, queryByRole } = render(<MenuHarness />);
+      const trigger = getByRole("button", { name: "Note actions" });
+      fireEvent.click(trigger);
+      fireEvent.keyDown(getByRole("menu"), { key: "Escape" });
+      expect(queryByRole("menu")).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+      fireEvent.click(trigger);
+      expect(document.activeElement).toBe(getByRole("menuitem", { name: "Rename" }));
+    });
+
+    it("does not pull focus back when the menu is re-positioned while open", () => {
+      const { getByRole, rerender } = render(<MenuHarness align="end" />);
+      fireEvent.click(getByRole("button", { name: "Note actions" }));
+      const del = getByRole("menuitem", { name: "Delete" });
+      del.focus();
+      rerender(<MenuHarness align="start" />);
+      expect(document.activeElement).toBe(del);
+    });
   });
 
   it("arrows skip disabled items and wrap; Home and End jump", () => {
