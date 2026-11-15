@@ -1459,6 +1459,18 @@ describe("keys that are not the widget's own", () => {
       expect(onDismiss).toHaveBeenCalledWith("escape");
     });
 
+    it("Dialog also recognises Safari's keyCode 229 for the key that ends a composition", () => {
+      const onDismiss = vi.fn();
+      const { getByLabelText } = render(
+        <Dialog title="Rename" onDismiss={onDismiss}>
+          <Input label="Name" />
+        </Dialog>,
+      );
+      const input = getByLabelText("Name");
+      expect(fireEvent.keyDown(input, { key: "Escape", keyCode: 229 })).toBe(true);
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
     it("Dialog does not wrap focus on a composing Tab", () => {
       const { getByRole } = render(
         <Dialog title="Rename" onDismiss={() => {}} actions={<Button>Done</Button>}>

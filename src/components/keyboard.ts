@@ -16,6 +16,22 @@ export function isPlainKeyPress(event: {
   ctrlKey: boolean;
   metaKey: boolean;
   isComposing: boolean;
+  keyCode: number;
 }): boolean {
-  return !(event.altKey || event.ctrlKey || event.metaKey || event.isComposing);
+  return !(
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    isImeKeyPress(event)
+  );
+}
+
+/** Whether an input method owns this key press. Safari reports the keydown
+ * that ends a composition (Escape to cancel, Enter to commit) with
+ * `isComposing` already false but `keyCode` 229, so both are checked. */
+export function isImeKeyPress(event: {
+  isComposing: boolean;
+  keyCode: number;
+}): boolean {
+  return event.isComposing || event.keyCode === 229;
 }

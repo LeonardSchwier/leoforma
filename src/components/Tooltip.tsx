@@ -1,6 +1,7 @@
 import { cloneElement, isValidElement } from "preact";
 import type { JSX, VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
+import { isImeKeyPress } from "./keyboard";
 
 export type TooltipPlacement = "top" | "bottom" | "left" | "right";
 
@@ -54,7 +55,7 @@ export function Tooltip({
   useEffect(() => {
     function onDocumentKeyDown(event: KeyboardEvent) {
       // Escape during IME composition cancels the composition, not the tooltip.
-      if (event.key === "Escape" && !event.isComposing && openRef.current) {
+      if (event.key === "Escape" && !isImeKeyPress(event) && openRef.current) {
         clearTimer();
         setOpen(false);
       }

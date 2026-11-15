@@ -1,6 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import { cx } from "./cx";
+import { isImeKeyPress } from "./keyboard";
 import {
   acquireScrollLock,
   focusableElements,
@@ -113,7 +114,7 @@ export function Dialog({
       if (!isTopmostOverlay(instanceId)) return;
       // While an input method is composing, Escape cancels the composition and
       // Tab picks a candidate; neither is meant for the dialog.
-      if (event.isComposing) return;
+      if (isImeKeyPress(event)) return;
       const current = surfaceRef.current;
       if (event.key === "Escape") {
         // An open Menu inside this dialog owns Escape: it closes itself,
