@@ -30,6 +30,7 @@ export function IconButton({
   disabled = false,
   type = "button",
   className,
+  class: classAttr,
   ...rest
 }: IconButtonProps): JSX.Element {
   return (
@@ -41,6 +42,7 @@ export function IconButton({
         `ds-icon-btn-${size}`,
         active && "ds-icon-btn-active",
         className as string | undefined,
+        classAttr as string | undefined,
       )}
       aria-label={label}
       title={label}

@@ -24,6 +24,7 @@ export function Button({
   disabled = false,
   type = "button",
   className,
+  class: classAttr,
   children,
   ...rest
 }: ButtonProps): JSX.Element {
@@ -36,6 +37,7 @@ export function Button({
         `ds-btn-${variant}`,
         `ds-btn-${size}`,
         className as string | undefined,
+        classAttr as string | undefined,
       )}
       disabled={Boolean(disabled) || loading}
       aria-busy={loading || undefined}

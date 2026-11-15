@@ -78,6 +78,7 @@ export function Input({
   error,
   id,
   className,
+  class: classAttr,
   "aria-describedby": describedBy,
   "aria-invalid": ariaInvalid,
   ...rest
@@ -89,7 +90,11 @@ export function Input({
       <input
         {...rest}
         id={ids.id}
-        class={cx("ds-input", className as string | undefined)}
+        class={cx(
+          "ds-input",
+          className as string | undefined,
+          classAttr as string | undefined,
+        )}
         aria-describedby={ids.describedBy}
         aria-invalid={error ? true : ariaInvalid}
       />
@@ -106,6 +111,7 @@ export function Textarea({
   error,
   id,
   className,
+  class: classAttr,
   "aria-describedby": describedBy,
   "aria-invalid": ariaInvalid,
   ...rest
@@ -117,7 +123,11 @@ export function Textarea({
       <textarea
         {...rest}
         id={ids.id}
-        class={cx("ds-textarea", className as string | undefined)}
+        class={cx(
+          "ds-textarea",
+          className as string | undefined,
+          classAttr as string | undefined,
+        )}
         aria-describedby={ids.describedBy}
         aria-invalid={error ? true : ariaInvalid}
       />
@@ -144,6 +154,7 @@ export function Select({
   error,
   id,
   className,
+  class: classAttr,
   options,
   "aria-describedby": describedBy,
   "aria-invalid": ariaInvalid,
@@ -156,7 +167,11 @@ export function Select({
       <select
         {...rest}
         id={ids.id}
-        class={cx("ds-select", className as string | undefined)}
+        class={cx(
+          "ds-select",
+          className as string | undefined,
+          classAttr as string | undefined,
+        )}
         aria-describedby={ids.describedBy}
         aria-invalid={error ? true : ariaInvalid}
       >
@@ -179,9 +194,20 @@ export type CheckboxProps = Omit<
   "type" | "label"
 > & { label: ComponentChildren };
 
-export function Checkbox({ label, className, ...rest }: CheckboxProps): JSX.Element {
+export function Checkbox({
+  label,
+  className,
+  class: classAttr,
+  ...rest
+}: CheckboxProps): JSX.Element {
   return (
-    <label class={cx("ds-check", className as string | undefined)}>
+    <label
+      class={cx(
+        "ds-check",
+        className as string | undefined,
+        classAttr as string | undefined,
+      )}
+    >
       <input {...rest} type="checkbox" class="ds-checkbox-input" />
       <span>{label}</span>
     </label>
@@ -192,9 +218,20 @@ export type SwitchProps = CheckboxProps;
 
 /** A checkbox input with `role="switch"`: keeps native Space handling, form
  * participation, and label association while announcing on and off. */
-export function Switch({ label, className, ...rest }: SwitchProps): JSX.Element {
+export function Switch({
+  label,
+  className,
+  class: classAttr,
+  ...rest
+}: SwitchProps): JSX.Element {
   return (
-    <label class={cx("ds-check", className as string | undefined)}>
+    <label
+      class={cx(
+        "ds-check",
+        className as string | undefined,
+        classAttr as string | undefined,
+      )}
+    >
       <input {...rest} type="checkbox" role="switch" class="ds-switch-input" />
       <span>{label}</span>
     </label>

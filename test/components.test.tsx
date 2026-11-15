@@ -1358,3 +1358,179 @@ describe("rovingTabStop", () => {
     expect(rovingTabStop(-1, [])).toBe(0);
   });
 });
+
+// A chord such as Alt+ArrowLeft (history back), Ctrl+ArrowRight (word jump,
+// virtual desktop switch) or Cmd+ArrowDown belongs to the browser, the OS or the
+// host app. A widget that treats it as a plain arrow both moves its own
+// selection and cancels the shortcut, because it calls preventDefault.
+// fireEvent returns false when the event was cancelled.
+describe("keys that are not the widget's own", () => {
+  const chords = [
+    { altKey: true },
+    { ctrlKey: true },
+    { metaKey: true },
+  ] as const;
+
+  it("Tabs ignores arrow, Home and End chords and leaves them to the browser", () => {
+    const onChange = vi.fn();
+    const { getByRole } = render(<TabsHarness onChange={onChange} />);
+    const one = getByRole("tab", { name: "One" });
+    one.focus();
+    for (const chord of chords) {
+      for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
+        expect(fireEvent.keyDown(one, { key, ...chord })).toBe(true);
+      }
+    }
+    expect(onChange).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(one);
+    // The plain key still works, so the guard is not just a dead handler.
+    expect(fireEvent.keyDown(one, { key: "ArrowRight" })).toBe(false);
+    expect(onChange).toHaveBeenCalledWith("c");
+  });
+
+  it("SegmentedControl ignores chords", () => {
+    const { getByRole } = render(<SegmentedHarness />);
+    const system = getByRole("radio", { name: "System" });
+    system.focus();
+    for (const chord of chords) {
+      expect(fireEvent.keyDown(system, { key: "ArrowRight", ...chord })).toBe(true);
+    }
+    expect(system.getAttribute("aria-checked")).toBe("true");
+    expect(fireEvent.keyDown(system, { key: "ArrowRight" })).toBe(false);
+    expect(getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe(
+      "true",
+    );
+  });
+
+  it("Tabs and SegmentedControl ignore keys pressed during IME composition", () => {
+    const onChange = vi.fn();
+    const { getByRole } = render(
+      <>
+        <TabsHarness onChange={onChange} />
+        <SegmentedHarness />
+      </>,
+    );
+    const one = getByRole("tab", { name: "One" });
+    expect(fireEvent.keyDown(one, { key: "ArrowRight", isComposing: true })).toBe(true);
+    expect(onChange).not.toHaveBeenCalled();
+    const system = getByRole("radio", { name: "System" });
+    expect(fireEvent.keyDown(system, { key: "ArrowRight", isComposing: true })).toBe(
+      true,
+    );
+    expect(system.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("Menu ignores chords on the trigger and on its items", () => {
+    const { getByRole } = render(<MenuHarness />);
+    const trigger = getByRole("button", { name: "Note actions" });
+    for (const chord of chords) {
+      expect(fireEvent.keyDown(trigger, { key: "ArrowDown", ...chord })).toBe(true);
+    }
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(trigger);
+    const rename = getByRole("menuitem", { name: "Rename" });
+    expect(document.activeElement).toBe(rename);
+    for (const chord of chords) {
+      for (const key of ["ArrowDown", "ArrowUp", "End", "Home"]) {
+        expect(fireEvent.keyDown(rename, { key, ...chord })).toBe(true);
+      }
+    }
+    expect(document.activeElement).toBe(rename);
+    expect(fireEvent.keyDown(rename, { key: "End" })).toBe(false);
+    expect(document.activeElement).toBe(getByRole("menuitem", { name: "Delete" }));
+  });
+
+  describe("Escape and Tab while an input method is composing", () => {
+    afterEach(() => resetOverlayStackForTests());
+
+    it("Dialog leaves Escape to the input method", () => {
+      const onDismiss = vi.fn();
+      const { getByLabelText } = render(
+        <Dialog title="Rename" onDismiss={onDismiss}>
+          <Input label="Name" />
+        </Dialog>,
+      );
+      const input = getByLabelText("Name");
+      expect(fireEvent.keyDown(input, { key: "Escape", isComposing: true })).toBe(true);
+      expect(onDismiss).not.toHaveBeenCalled();
+      // Once composition has ended, Escape closes the dialog as before.
+      expect(fireEvent.keyDown(input, { key: "Escape" })).toBe(false);
+      expect(onDismiss).toHaveBeenCalledWith("escape");
+    });
+
+    it("Dialog does not wrap focus on a composing Tab", () => {
+      const { getByRole } = render(
+        <Dialog title="Rename" onDismiss={() => {}} actions={<Button>Done</Button>}>
+          <Button>Cancel</Button>
+        </Dialog>,
+      );
+      const done = getByRole("button", { name: "Done" });
+      done.focus();
+      expect(fireEvent.keyDown(done, { key: "Tab", isComposing: true })).toBe(true);
+      expect(document.activeElement).toBe(done);
+    });
+
+    it("Tooltip stays open", () => {
+      const { getByRole, queryByRole } = render(
+        <Tooltip content="Tip">
+          <button>Save</button>
+        </Tooltip>,
+      );
+      fireEvent.focus(getByRole("button"));
+      fireEvent.keyDown(document, { key: "Escape", isComposing: true });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(queryByRole("tooltip")).toBeNull();
+    });
+  });
+});
+
+// Preact accepts both `class` and `className`. The components used to spread the
+// host's props and then set `class` themselves, so a host's `class` vanished
+// without a warning.
+describe("host class names", () => {
+  it("keeps `class` as well as `className` on every spread-props component", () => {
+    const { container } = render(
+      <>
+        <Button class="host-a">Save</Button>
+        <IconButton class="host-b" icon={icon} label="Close" />
+        <Badge class="host-c">New</Badge>
+        <Card class="host-d" title="Note" />
+        <Input class="host-e" label="Title" />
+        <Textarea class="host-f" label="Body" />
+        <Select class="host-g" label="Font" options={[{ value: "a", label: "Sans" }]} />
+        <Checkbox class="host-h" label="Wrap" />
+        <Switch class="host-i" label="Spell" />
+      </>,
+    );
+    const expected: Record<string, string> = {
+      "host-a": "ds-btn",
+      "host-b": "ds-icon-btn",
+      "host-c": "ds-badge",
+      "host-d": "ds-card",
+      "host-e": "ds-input",
+      "host-f": "ds-textarea",
+      "host-g": "ds-select",
+      "host-h": "ds-check",
+      "host-i": "ds-check",
+    };
+    for (const [host, own] of Object.entries(expected)) {
+      const element = container.querySelector(`.${host}`);
+      expect(element, host).not.toBeNull();
+      expect(element!.classList.contains(own), `${host} keeps ${own}`).toBe(true);
+    }
+  });
+
+  it("merges `class` and `className` when both are given", () => {
+    const { getByRole } = render(
+      <Button class="from-class" className="from-class-name">
+        Save
+      </Button>,
+    );
+    const button = getByRole("button", { name: "Save" });
+    for (const name of ["ds-btn", "from-class", "from-class-name"]) {
+      expect(button.classList.contains(name), name).toBe(true);
+    }
+  });
+});

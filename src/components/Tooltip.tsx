@@ -53,7 +53,8 @@ export function Tooltip({
 
   useEffect(() => {
     function onDocumentKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && openRef.current) {
+      // Escape during IME composition cancels the composition, not the tooltip.
+      if (event.key === "Escape" && !event.isComposing && openRef.current) {
         clearTimer();
         setOpen(false);
       }

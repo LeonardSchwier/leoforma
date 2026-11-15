@@ -1,6 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { cx } from "./cx";
+import { isPlainKeyPress } from "./keyboard";
 
 export type MenuAlign = "start" | "end";
 export type MenuItemVariant = "default" | "danger";
@@ -168,6 +169,8 @@ export function Menu({
       close(false);
       return;
     }
+    // Alt, Ctrl and Meta chords stay with the browser and the host.
+    if (!isPlainKeyPress(event)) return;
     const available = enabledItems(menu);
     if (available.length === 0) return;
     const current = available.indexOf(
@@ -210,7 +213,11 @@ export function Menu({
           else show();
         }}
         onKeyDown={(event) => {
-          if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+          if (
+            !open &&
+            isPlainKeyPress(event) &&
+            (event.key === "ArrowDown" || event.key === "ArrowUp")
+          ) {
             event.preventDefault();
             show(event.key === "ArrowUp" ? "last" : "first");
           }

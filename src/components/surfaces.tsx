@@ -12,13 +12,19 @@ export interface BadgeProps extends JSX.HTMLAttributes<HTMLSpanElement> {
 export function Badge({
   tone = "neutral",
   className,
+  class: classAttr,
   children,
   ...rest
 }: BadgeProps): JSX.Element {
   return (
     <span
       {...rest}
-      class={cx("ds-badge", `ds-badge-${tone}`, className as string | undefined)}
+      class={cx(
+        "ds-badge",
+        `ds-badge-${tone}`,
+        className as string | undefined,
+        classAttr as string | undefined,
+      )}
     >
       {children}
     </span>
@@ -36,6 +42,7 @@ export function Card({
   title,
   raised = false,
   className,
+  class: classAttr,
   children,
   ...rest
 }: CardProps): JSX.Element {
@@ -46,6 +53,7 @@ export function Card({
         "ds-card",
         raised && "ds-card-raised",
         className as string | undefined,
+        classAttr as string | undefined,
       )}
     >
       {title && <h3 class="ds-card-title">{title}</h3>}

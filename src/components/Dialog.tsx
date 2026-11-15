@@ -111,6 +111,9 @@ export function Dialog({
 
     function onDocumentKeyDown(event: KeyboardEvent) {
       if (!isTopmostOverlay(instanceId)) return;
+      // While an input method is composing, Escape cancels the composition and
+      // Tab picks a candidate; neither is meant for the dialog.
+      if (event.isComposing) return;
       const current = surfaceRef.current;
       if (event.key === "Escape") {
         // An open Menu inside this dialog owns Escape: it closes itself,

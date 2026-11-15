@@ -1,6 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useRef } from "preact/hooks";
 import { cx } from "./cx";
+import { isPlainKeyPress } from "./keyboard";
 import { nextRovingIndex, rovingTabStop } from "./rovingKeys";
 
 export interface SegmentedOption<V extends string> {
@@ -35,6 +36,7 @@ export function SegmentedControl<V extends string>({
   const tabStop = rovingTabStop(selectedIndex, enabled);
 
   function onKeyDown(event: JSX.TargetedKeyboardEvent<HTMLDivElement>) {
+    if (!isPlainKeyPress(event)) return;
     const next = nextRovingIndex(event.key, tabStop, enabled);
     if (next === null) return;
     event.preventDefault();
