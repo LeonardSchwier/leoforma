@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { themes, type ColorMode, type ColorRoles, type ThemeName } from "../src/tokens";
 import { contrastRatio } from "../src/tokens/contrast";
@@ -52,4 +54,40 @@ describe("contrastRatio", () => {
   it("rejects anything but six digit hex, so a typo cannot pass silently", () => {
     expect(() => contrastRatio("red", "#ffffff")).toThrow(/six digit hex/);
   });
+});
+
+/** The color a foreground shows as when painted at `alpha` over `background`. */
+function blend(foreground: string, background: string, alpha: number): string {
+  const channel = (hex: string, index: number) => parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16);
+  const mixed = [0, 1, 2].map((index) =>
+    Math.round(alpha * channel(foreground, index) + (1 - alpha) * channel(background, index)),
+  );
+  return `#${mixed.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+describe("busy button focus ring", () => {
+  // A loading Button or IconButton stays focusable and is dimmed with `opacity`,
+  // which dims its focus outline too. At the :disabled value of 0.5 the ring fell
+  // to about 2.3:1 on the light themes, below the 3:1 of WCAG 1.4.11.
+  const css = readFileSync(join(__dirname, "../src/styles/components.css"), "utf8");
+  const rule = /\.ds-btn\[aria-busy="true"\]:not\(:disabled\),\s*\.ds-icon-btn\[aria-busy="true"\]:not\(:disabled\)\s*\{([^}]*)\}/.exec(
+    css,
+  );
+  const opacity = Number(/opacity:\s*([\d.]+)\s*;/.exec(rule?.[1] ?? "")?.[1]);
+
+  it("dims a busy button by a number the stylesheet really sets", () => {
+    expect(rule, "busy rule not found in components.css").not.toBeNull();
+    expect(opacity).toBeGreaterThan(0.5);
+    expect(opacity).toBeLessThanOrEqual(1);
+  });
+
+  for (const themeName of Object.keys(themes) as ThemeName[]) {
+    for (const mode of ["light", "dark"] as ColorMode[]) {
+      it.each(CONTROL_SURFACES)(`${themeName} ${mode}: dimmed ring on %s reaches 3:1`, (surface) => {
+        const roles = themes[themeName].color[mode];
+        const ring = blend(roles.focus, roles[surface], opacity);
+        expect(contrastRatio(ring, roles[surface])).toBeGreaterThanOrEqual(3);
+      });
+    }
+  }
 });

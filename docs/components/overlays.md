@@ -68,7 +68,7 @@ Supplementary description only, for a single focusable child.
 | `children` | `VNode<TriggerProps>` | yes | A single focusable element. |
 <!-- /props -->
 
-Accessibility: connected through `aria-describedby` while visible; shows at once on keyboard focus, after `delay` on hover; Escape dismisses it (WCAG 1.4.13), except while an input method is composing. Never put essential information only in a tooltip.
+Accessibility: connected through `aria-describedby` while visible; shows at once on keyboard focus, after `delay` on hover; Escape dismisses it (the dismissible part of WCAG 1.4.13), except while an input method is composing. It is not yet hoverable: the pointer cannot move onto the tooltip without it closing, so the hoverable part of 1.4.13 is open (see [ROADMAP.md](../../ROADMAP.md)). Never put essential information only in a tooltip.
 
 ## ToastRegion
 

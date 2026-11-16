@@ -48,13 +48,136 @@ describe("Button", () => {
       </Button>,
     );
     const button = getByRole("button", { name: "Save" }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
     expect(button.getAttribute("aria-busy")).toBe("true");
-    // Native click(): jsdom's dispatchEvent still delivers a synthetic click to
-    // a disabled button, while a real click (HTMLElement.click) is dropped, as in
-    // a browser.
+    expect(button.getAttribute("aria-disabled")).toBe("true");
     button.click();
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  // A natively disabled button drops focus (to the body in Chromium, checked
+  // there with Playwright), so a keyboard user who pressed "Save" would lose
+  // their place. jsdom does not model that, so the test pins the cause: a busy
+  // button must not be natively disabled, and focus must survive the rerender.
+  it("stays focusable while loading, so a keyboard user keeps their place", () => {
+    const { getByRole, rerender } = render(<Button>Save</Button>);
+    const button = getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    button.focus();
+    rerender(<Button loading>Save</Button>);
+    expect(button.disabled).toBe(false);
+    expect(document.activeElement).toBe(button);
+    rerender(<Button>Save</Button>);
+    expect(button.hasAttribute("aria-disabled")).toBe(false);
+    expect(button.hasAttribute("aria-busy")).toBe(false);
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("activates again when loading ends", () => {
+    const onClick = vi.fn();
+    const { getByRole, rerender } = render(
+      <Button loading onClick={onClick}>
+        Save
+      </Button>,
+    );
+    const button = getByRole("button", { name: "Save" });
+    button.click();
+    rerender(
+      <Button onClick={onClick}>Save</Button>,
+    );
+    button.click();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not submit or reset a form while loading, and does for a normal button", () => {
+    const onSubmit = vi.fn((event: Event) => event.preventDefault());
+    const onReset = vi.fn();
+    const { getByRole, rerender } = render(
+      <form onSubmit={onSubmit} onReset={onReset}>
+        <Button type="submit" loading>
+          Send
+        </Button>
+        <Button type="reset" loading>
+          Clear
+        </Button>
+      </form>,
+    );
+    // Enter and Space on a focused button, and Enter in a text field, all end in
+    // a click on the button, so the click is the one place to stop them.
+    getByRole("button", { name: "Send" }).click();
+    getByRole("button", { name: "Clear" }).click();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onReset).not.toHaveBeenCalled();
+
+    rerender(
+      <form onSubmit={onSubmit} onReset={onReset}>
+        <Button type="submit">Send</Button>
+        <Button type="reset">Clear</Button>
+      </form>,
+    );
+    getByRole("button", { name: "Send" }).click();
+    getByRole("button", { name: "Clear" }).click();
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a click on a loading button away from its ancestors", () => {
+    // A natively disabled button delivered no click to a clickable Card or row;
+    // the busy button must not start doing so.
+    const onAncestorClick = vi.fn();
+    const { getByRole } = render(
+      <div onClick={onAncestorClick}>
+        <Button loading>Open</Button>
+      </div>,
+    );
+    getByRole("button", { name: "Open" }).click();
+    expect(onAncestorClick).not.toHaveBeenCalled();
+  });
+
+  it("stays natively disabled when the host disables it, loading or not", () => {
+    const onClick = vi.fn();
+    const { getByRole } = render(
+      <Button disabled loading onClick={onClick}>
+        Save
+      </Button>,
+    );
+    const button = getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.hasAttribute("aria-disabled")).toBe(false);
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    button.click();
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("reports unavailable while loading even if the host said aria-disabled=false", () => {
+    const { getByRole } = render(
+      <Button loading aria-disabled="false">
+        Save
+      </Button>,
+    );
+    expect(getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("keeps a host aria-disabled when it is not loading", () => {
+    const { getByRole } = render(<Button aria-disabled="true">Save</Button>);
+    expect(getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("passes clicks to the host handler when idle", () => {
+    const onClick = vi.fn();
+    const { getByRole } = render(<Button onClick={onClick}>Save</Button>);
+    getByRole("button", { name: "Save" }).click();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no axe violations while loading", async () => {
+    const { container } = render(
+      <div>
+        <Button loading>Save</Button>
+        <Button disabled loading>
+          Delete
+        </Button>
+      </div>,
+    );
+    await expectNoAxeViolations(container);
   });
 
   it("has no axe violations in any variant", async () => {
@@ -83,8 +206,56 @@ describe("IconButton", () => {
     const { getByRole, container } = render(
       <IconButton icon={icon} label="Sync" loading />,
     );
-    expect((getByRole("button") as HTMLButtonElement).disabled).toBe(true);
+    const button = getByRole("button") as HTMLButtonElement;
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.getAttribute("aria-disabled")).toBe("true");
     expect(container.querySelector(".ds-spinner")).not.toBeNull();
+  });
+
+  it("blocks activation and keeps focus while loading", () => {
+    const onClick = vi.fn();
+    const onAncestorClick = vi.fn();
+    const { getByRole, rerender } = render(
+      <div onClick={onAncestorClick}>
+        <IconButton icon={icon} label="Sync" onClick={onClick} />
+      </div>,
+    );
+    const button = getByRole("button", { name: "Sync" }) as HTMLButtonElement;
+    button.focus();
+    rerender(
+      <div onClick={onAncestorClick}>
+        <IconButton icon={icon} label="Sync" loading onClick={onClick} />
+      </div>,
+    );
+    expect(button.disabled).toBe(false);
+    expect(document.activeElement).toBe(button);
+    button.click();
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onAncestorClick).not.toHaveBeenCalled();
+    rerender(
+      <div onClick={onAncestorClick}>
+        <IconButton icon={icon} label="Sync" onClick={onClick} />
+      </div>,
+    );
+    button.click();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays natively disabled when the host disables it, loading or not", () => {
+    const onClick = vi.fn();
+    const { getByRole } = render(
+      <IconButton icon={icon} label="Sync" disabled loading onClick={onClick} />,
+    );
+    const button = getByRole("button", { name: "Sync" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.hasAttribute("aria-disabled")).toBe(false);
+    button.click();
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("has no axe violations while loading", async () => {
+    const { container } = render(<IconButton icon={icon} label="Sync" loading />);
+    await expectNoAxeViolations(container);
   });
 
   it("has no axe violations", async () => {

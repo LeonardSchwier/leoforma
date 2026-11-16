@@ -75,6 +75,15 @@ const REQUIRED: [string, string, string][] = [
   [".ds-switch-input:checked", "background", "Highlight"],
   [".ds-switch-input:checked", "border-color", "Highlight"],
   [".ds-switch-input:checked::before", "background", "HighlightText"],
+  // A busy (loading) button is focusable, so it is not natively disabled and the
+  // browser does not gray it: restate it, as a disabled one would look.
+  ['.ds-btn[aria-busy="true"]:not(:disabled)', "color", "GrayText"],
+  ['.ds-btn[aria-busy="true"]:not(:disabled)', "border-color", "GrayText"],
+  [
+    '.ds-icon-btn[aria-busy="true"]:not(:disabled):not(.ds-icon-btn-active)',
+    "color",
+    "GrayText",
+  ],
   // Toggle IconButton: pressed must not look like unpressed. The fill carries
   // text, so the element opts out of forced-color-adjust (see the backplate
   // test below) and restates the focus ring, which then keeps its authored color.

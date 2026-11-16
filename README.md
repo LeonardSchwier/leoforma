@@ -82,7 +82,7 @@ Semver, with the breaking-change rule for 0.x in `CONTRIBUTING.md`. Changes are 
 
 ## Dependencies and security
 
-CI audits runtime dependencies (`npm audit --omit=dev`; there are none besides the `preact` peer). `npm audit` over the dev toolchain currently reports moderate advisories in vitest and minimatch; they affect only local test and lint runs, never the published output, and the fixes need a major vitest upgrade. Dependabot proposes npm and GitHub Actions updates monthly. See `SECURITY.md` to report a vulnerability and `CONTRIBUTING.md` to contribute.
+CI audits runtime dependencies (`npm audit --omit=dev`; there are none besides the `preact` peer). `npm audit` over the dev toolchain currently reports advisories in vitest (through `tinypool`, 2 critical) and in minimatch (through typescript-eslint, moderate); they affect only local test and lint runs, never the published output, and the fixes need a major vitest upgrade (tracked in [ROADMAP.md](ROADMAP.md)). Dependabot proposes npm and GitHub Actions updates monthly. See `SECURITY.md` to report a vulnerability and `CONTRIBUTING.md` to contribute.
 
 ## Key design principles of the repository
 

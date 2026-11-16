@@ -36,6 +36,16 @@
   cursor: default;
   opacity: 0.5;
 }
+/* Busy (`loading`): the button stays focusable, so it is styled by aria-busy
+ * rather than :disabled. The dimming is lighter than for :disabled because the
+ * focus ring is dimmed with the element and must stay at 3:1 (WCAG 1.4.11):
+ * test/contrast.test.ts computes it from this value. The :where() keeps the
+ * hover rules' specificity unchanged. */
+.ds-btn[aria-busy="true"]:not(:disabled),
+.ds-icon-btn[aria-busy="true"]:not(:disabled) {
+  cursor: progress;
+  opacity: 0.7;
+}
 .ds-btn-sm {
   height: 28px;
   padding: 0 var(--ds-space-3);
@@ -51,7 +61,7 @@
   color: var(--ds-color-on-accent);
   border-color: var(--ds-color-accent);
 }
-.ds-btn-primary:not(:disabled):hover {
+.ds-btn-primary:not(:disabled):where(:not([aria-busy="true"])):hover {
   background: var(--ds-color-accent-hover);
   border-color: var(--ds-color-accent-hover);
 }
@@ -60,8 +70,8 @@
   color: var(--ds-color-text);
   border-color: var(--ds-color-border-strong);
 }
-.ds-btn-secondary:not(:disabled):hover,
-.ds-btn-ghost:not(:disabled):hover {
+.ds-btn-secondary:not(:disabled):where(:not([aria-busy="true"])):hover,
+.ds-btn-ghost:not(:disabled):where(:not([aria-busy="true"])):hover {
   background: var(--ds-color-hover);
 }
 .ds-btn-ghost {
@@ -73,7 +83,7 @@
   color: var(--ds-color-on-danger);
   border-color: var(--ds-color-danger);
 }
-.ds-btn-danger:not(:disabled):hover {
+.ds-btn-danger:not(:disabled):where(:not([aria-busy="true"])):hover {
   filter: brightness(0.92);
 }
 .ds-btn-spinner {
@@ -92,7 +102,7 @@
   color: var(--ds-color-text);
   cursor: pointer;
 }
-.ds-icon-btn:not(:disabled):hover {
+.ds-icon-btn:not(:disabled):where(:not([aria-busy="true"])):hover {
   background: var(--ds-color-hover);
 }
 .ds-icon-btn:disabled {
@@ -712,6 +722,16 @@
   }
   .ds-switch-input:checked::before {
     background: HighlightText;
+  }
+
+  /* A busy button is not natively disabled, so the browser does not gray it. A
+   * pressed toggle IconButton is left out: it keeps its Highlight fill (see
+   * below) and GrayText on that fill would be unreadable, so the spinner and the
+   * dimming are the cues there. */
+  .ds-btn[aria-busy="true"]:not(:disabled),
+  .ds-icon-btn[aria-busy="true"]:not(:disabled):not(.ds-icon-btn-active) {
+    color: GrayText;
+    border-color: GrayText;
   }
 
   .ds-icon-btn-active,
