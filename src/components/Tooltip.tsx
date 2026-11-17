@@ -22,8 +22,15 @@ export interface TooltipProps {
 
 let tooltipCounter = 0;
 
+/** How long an open tooltip survives the pointer leaving the trigger or the
+ * tooltip, so the pointer can cross the gap between them (WCAG 1.4.13). */
+const HOVER_GRACE_MS = 150;
+
 /** Supplementary description only: it connects through `aria-describedby`
- * while visible, and Escape dismisses it (WCAG 1.4.13). */
+ * while visible. For WCAG 1.4.13 it is dismissible (Escape) and hoverable (the
+ * pointer can move onto it without it closing). A hover tooltip persists until
+ * the pointer leaves; one opened by focus also closes when the pointer has
+ * hovered it and left, even though focus is still on the trigger. */
 export function Tooltip({
   content,
   placement = "top",
@@ -48,6 +55,18 @@ export function Tooltip({
       clearTimeout(timerRef.current);
       timerRef.current = undefined;
     }
+  }
+
+  // The pointer left the trigger or the tooltip. An open tooltip waits a moment
+  // so the pointer can reach the other one; a pending (not yet shown) one is
+  // simply cancelled.
+  function leaveHover() {
+    clearTimer();
+    if (!openRef.current) return;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = undefined;
+      setOpen(false);
+    }, HOVER_GRACE_MS);
   }
 
   useEffect(() => clearTimer, []);
@@ -78,12 +97,16 @@ export function Tooltip({
       childProps.onMouseEnter?.(event);
       if (!active) return;
       clearTimer();
-      timerRef.current = setTimeout(() => setOpen(true), delay);
+      // Already open (the pointer came back within the grace period): stay open.
+      if (openRef.current) return;
+      timerRef.current = setTimeout(() => {
+        timerRef.current = undefined;
+        setOpen(true);
+      }, delay);
     },
     onMouseLeave: (event: JSX.TargetedMouseEvent<HTMLElement>) => {
       childProps.onMouseLeave?.(event);
-      clearTimer();
-      setOpen(false);
+      leaveHover();
     },
     onFocus: (event: JSX.TargetedFocusEvent<HTMLElement>) => {
       childProps.onFocus?.(event);
@@ -102,7 +125,13 @@ export function Tooltip({
     <span class="ds-tooltip-anchor">
       {trigger}
       {showing && (
-        <span role="tooltip" id={id} class={`ds-tooltip ds-tooltip-${placement}`}>
+        <span
+          role="tooltip"
+          id={id}
+          class={`ds-tooltip ds-tooltip-${placement}`}
+          onMouseEnter={clearTimer}
+          onMouseLeave={leaveHover}
+        >
           {content}
         </span>
       )}

@@ -338,7 +338,6 @@
   line-height: 1.4;
   text-align: center;
   box-shadow: var(--ds-shadow-low);
-  pointer-events: none;
 }
 .ds-tooltip-top {
   bottom: calc(100% + var(--ds-space-1));

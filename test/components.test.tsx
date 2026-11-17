@@ -516,6 +516,146 @@ describe("Tooltip", () => {
     expect(queryByRole("tooltip")).toBeNull();
   });
 
+  describe("hoverable (WCAG 1.4.13)", () => {
+    function openByHover(delay = 300) {
+      const utils = render(
+        <Tooltip content="Tip" delay={delay}>
+          <button>Save</button>
+        </Tooltip>,
+      );
+      const button = utils.getByRole("button");
+      fireEvent.mouseEnter(button);
+      act(() => {
+        vi.advanceTimersByTime(delay);
+      });
+      expect(utils.getByRole("tooltip")).not.toBeNull();
+      return { ...utils, button };
+    }
+
+    it("survives a short gap after the pointer leaves the trigger, then closes", () => {
+      const { button, queryByRole } = openByHover();
+      fireEvent.mouseLeave(button);
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(queryByRole("tooltip")).toBeNull();
+      expect(button.getAttribute("aria-describedby")).toBeNull();
+    });
+
+    it("stays open while the pointer is on the tooltip, and closes after it leaves", () => {
+      const { button, getByRole, queryByRole } = openByHover();
+      fireEvent.mouseLeave(button);
+      fireEvent.mouseEnter(getByRole("tooltip"));
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      expect(button.getAttribute("aria-describedby")).toBe(getByRole("tooltip").id);
+      fireEvent.mouseLeave(getByRole("tooltip"));
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(queryByRole("tooltip")).toBeNull();
+    });
+
+    it("stays open, without a second delay, when the pointer returns to the trigger", () => {
+      const { button, queryByRole } = openByHover();
+      fireEvent.mouseLeave(button);
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      fireEvent.mouseEnter(button);
+      // Still shown, with no new hover delay (300 ms) to wait for.
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      // The cancelled grace timer must not close it later.
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      fireEvent.mouseLeave(button);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(queryByRole("tooltip")).toBeNull();
+    });
+
+    it("still dismisses on Escape while the pointer is on the tooltip", () => {
+      const { button, getByRole, queryByRole } = openByHover();
+      fireEvent.mouseLeave(button);
+      fireEvent.mouseEnter(getByRole("tooltip"));
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(queryByRole("tooltip")).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("closes at once on blur even inside the grace period", () => {
+      const { button, queryByRole } = openByHover();
+      fireEvent.focus(button);
+      fireEvent.mouseLeave(button);
+      expect(vi.getTimerCount()).toBe(1); // the grace period is running
+      expect(queryByRole("tooltip")).not.toBeNull();
+      fireEvent.blur(button);
+      expect(queryByRole("tooltip")).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("cancels a pending hover (not yet shown) at once, with no grace timer", () => {
+      const { getByRole, queryByRole } = render(
+        <Tooltip content="Tip" delay={300}>
+          <button>Save</button>
+        </Tooltip>,
+      );
+      const button = getByRole("button");
+      fireEvent.mouseEnter(button);
+      fireEvent.mouseLeave(button);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(queryByRole("tooltip")).toBeNull();
+    });
+
+    it("clears a pending grace timer on unmount", () => {
+      const { button, unmount } = openByHover();
+      fireEvent.mouseLeave(button);
+      expect(vi.getTimerCount()).toBe(1);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("keeps the trigger's own mouse handlers", () => {
+      const onMouseEnter = vi.fn();
+      const onMouseLeave = vi.fn();
+      const { getByRole } = render(
+        <Tooltip content="Tip">
+          <button onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+            Save
+          </button>
+        </Tooltip>,
+      );
+      fireEvent.mouseEnter(getByRole("button"));
+      fireEvent.mouseLeave(getByRole("button"));
+      expect(onMouseEnter).toHaveBeenCalledTimes(1);
+      expect(onMouseLeave).toHaveBeenCalledTimes(1);
+    });
+
+    it("has no axe violations while the pointer is on the tooltip", async () => {
+      const { container, button, getByRole } = openByHover();
+      fireEvent.mouseLeave(button);
+      fireEvent.mouseEnter(getByRole("tooltip"));
+      vi.useRealTimers(); // axe-core schedules its own timers
+      await expectNoAxeViolations(container);
+    });
+  });
+
   it("keeps the trigger's own handlers and renders nothing extra when disabled", () => {
     const onFocus = vi.fn();
     const { getByRole, queryByRole } = render(
