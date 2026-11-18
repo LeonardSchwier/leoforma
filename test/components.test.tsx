@@ -656,6 +656,168 @@ describe("Tooltip", () => {
     });
   });
 
+  describe("persistent while keyboard-focused (WCAG 1.4.13)", () => {
+    // jsdom answers `:focus-visible` exactly like `:focus`, so it cannot tell a
+    // click from a Tab. These tests set the answer themselves and send the
+    // focus events with `fireEvent`, as the rest of this file does.
+    let focusVisible = false;
+    beforeEach(() => {
+      focusVisible = false;
+      const matches = Element.prototype.matches;
+      vi.spyOn(Element.prototype, "matches").mockImplementation(function (this: Element, selector: string) {
+        return selector === ":focus-visible" ? focusVisible : matches.call(this, selector);
+      });
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    function openByKeyboardFocus() {
+      const utils = render(
+        <Tooltip content="Tip" delay={300}>
+          <button>Save</button>
+        </Tooltip>,
+      );
+      const button = utils.getByRole("button");
+      focusVisible = true;
+      fireEvent.focus(button);
+      expect(utils.getByRole("tooltip")).not.toBeNull();
+      return { ...utils, button };
+    }
+
+    it("stays open after the pointer hovers the trigger and leaves", () => {
+      const { button, getByRole, queryByRole } = openByKeyboardFocus();
+      fireEvent.mouseEnter(button);
+      fireEvent.mouseLeave(button);
+      expect(vi.getTimerCount()).toBe(0); // no grace timer is started
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      expect(button.getAttribute("aria-describedby")).toBe(getByRole("tooltip").id);
+    });
+
+    it("stays open after the pointer rests on the tooltip and leaves it", () => {
+      const { button, getByRole, queryByRole } = openByKeyboardFocus();
+      fireEvent.mouseEnter(button);
+      fireEvent.mouseLeave(button);
+      fireEvent.mouseEnter(getByRole("tooltip"));
+      fireEvent.mouseLeave(getByRole("tooltip"));
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+    });
+
+    it("closes on blur, even after the pointer has come and gone", () => {
+      const { button, queryByRole } = openByKeyboardFocus();
+      fireEvent.mouseEnter(button);
+      fireEvent.mouseLeave(button);
+      fireEvent.blur(button);
+      expect(queryByRole("tooltip")).toBeNull();
+      expect(button.getAttribute("aria-describedby")).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("closes on Escape, and a later hover then closes after the pointer leaves", () => {
+      const { button, queryByRole } = openByKeyboardFocus();
+      fireEvent.mouseEnter(button);
+      fireEvent.mouseLeave(button);
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(queryByRole("tooltip")).toBeNull();
+      // Dismissed, then hovered open again: focus is still on the trigger, but
+      // the tooltip it is showing now was opened by the pointer.
+      fireEvent.mouseEnter(button);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      fireEvent.mouseLeave(button);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(queryByRole("tooltip")).toBeNull();
+    });
+
+    it("does not stay open after a mouse click focused the trigger", () => {
+      const { getByRole, queryByRole } = render(
+        <Tooltip content="Tip" delay={300}>
+          <button>Save</button>
+        </Tooltip>,
+      );
+      const button = getByRole("button");
+      fireEvent.mouseEnter(button);
+      focusVisible = false; // a click focuses a button without :focus-visible
+      fireEvent.focus(button);
+      expect(queryByRole("tooltip")).not.toBeNull();
+      fireEvent.mouseLeave(button);
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull(); // grace period only
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(queryByRole("tooltip")).toBeNull();
+    });
+
+    it("stays open when a click-focused trigger turns keyboard-focused before the pointer leaves", () => {
+      const { getByRole, queryByRole } = render(
+        <Tooltip content="Tip">
+          <button>Save</button>
+        </Tooltip>,
+      );
+      const button = getByRole("button");
+      fireEvent.focus(button);
+      fireEvent.mouseEnter(button);
+      focusVisible = true; // the user pressed a key on the focused button
+      fireEvent.mouseLeave(button);
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+    });
+
+    it("keeps a hover-opened tooltip subject to the grace period when focus is elsewhere", () => {
+      const { getByRole, queryByRole } = render(
+        <Tooltip content="Tip" delay={300}>
+          <button>Save</button>
+        </Tooltip>,
+      );
+      const button = getByRole("button");
+      focusVisible = true; // some other element has keyboard focus
+      fireEvent.mouseEnter(button);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(queryByRole("tooltip")).not.toBeNull();
+      fireEvent.mouseLeave(button);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(queryByRole("tooltip")).toBeNull();
+    });
+
+    it("falls back to the grace period when the browser cannot evaluate :focus-visible", () => {
+      const { button, queryByRole } = openByKeyboardFocus();
+      vi.mocked(Element.prototype.matches).mockImplementation(() => {
+        throw new SyntaxError("':focus-visible' is not a valid selector");
+      });
+      fireEvent.mouseEnter(button);
+      fireEvent.mouseLeave(button);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(queryByRole("tooltip")).toBeNull();
+    });
+
+    it("has no axe violations while kept open after the pointer left", async () => {
+      const { container, button } = openByKeyboardFocus();
+      fireEvent.mouseEnter(button);
+      fireEvent.mouseLeave(button);
+      vi.useRealTimers(); // axe-core schedules its own timers
+      await expectNoAxeViolations(container);
+    });
+  });
+
   it("keeps the trigger's own handlers and renders nothing extra when disabled", () => {
     const onFocus = vi.fn();
     const { getByRole, queryByRole } = render(
