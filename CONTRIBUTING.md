@@ -6,7 +6,7 @@
 git clone https://github.com/LeonardSchwier/leoforma && cd leoforma && npm ci && npm run check
 ```
 
-`npm run check` runs typecheck, lint, tests, the props docs check and the build, exactly as CI does. Node 20 or newer. Screenshots additionally need `npx playwright install chromium-headless-shell` once.
+`npm run check` runs typecheck, lint, tests, the props docs check and the build, exactly as CI does. Node 22.12 or newer on the 22 line, or 24, or 26 and later (vitest 5 needs one of these). Screenshots additionally need `npx playwright install chromium-headless-shell` once.
 
 ## Layout and naming
 

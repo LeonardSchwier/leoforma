@@ -82,7 +82,7 @@ Semver, with the breaking-change rule for 0.x in `CONTRIBUTING.md`. Changes are 
 
 ## Dependencies and security
 
-CI audits runtime dependencies (`npm audit --omit=dev`; there are none besides the `preact` peer). `npm audit` over the dev toolchain currently reports advisories in vitest (through `tinypool`, 2 critical) and in minimatch (through typescript-eslint, moderate); they affect only local test and lint runs, never the published output, and the fixes need a major vitest upgrade (tracked in [ROADMAP.md](ROADMAP.md)). Dependabot proposes npm and GitHub Actions updates monthly. See `SECURITY.md` to report a vulnerability and `CONTRIBUTING.md` to contribute.
+CI audits runtime dependencies (`npm audit --omit=dev`; there are none besides the `preact` peer). `npm audit` over the dev toolchain currently reports one advisory, a ReDoS in `picomatch` 4.0.7 (GHSA-fc5q-39xc-vjpf, high), which npm lists again for each package that depends on it (vite, vitest, fdir, tinyglobby, typescript-eslint); no patched `picomatch` is published yet, it affects only local test, lint and build runs, never the published output, and it is tracked in [ROADMAP.md](ROADMAP.md). Dependabot proposes npm and GitHub Actions updates monthly. See `SECURITY.md` to report a vulnerability and `CONTRIBUTING.md` to contribute.
 
 ## Key design principles of the repository
 
@@ -104,7 +104,7 @@ Each claim names where to check it.
 | Fonts carry their licences; the library is MIT. | [`src/fonts`](src/fonts), [`LICENSE`](LICENSE), `test/build.test.ts` |
 | Ownership and process are explicit. | [`.github/CODEOWNERS`](.github/CODEOWNERS), [`.github/pull_request_template.md`](.github/pull_request_template.md), [`SECURITY.md`](SECURITY.md), [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
-Known limits: the dev toolchain has moderate advisories (see above), releases are cut by hand, and the package is not on a registry by design.
+Known limits: the dev toolchain has one unpatched advisory (see above), releases are cut by hand, and the package is not on a registry by design.
 
 ## Develop
 
