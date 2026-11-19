@@ -1012,6 +1012,352 @@ describe("Menu", () => {
   });
 });
 
+// WAI-ARIA menu button pattern: typing characters moves focus to the next item
+// whose name starts with them.
+describe("Menu typeahead", () => {
+  const noop = () => undefined;
+  function TypeaheadHarness({ labels }: { labels?: readonly string[] } = {}) {
+    const names = labels ?? ["Archive", "Duplicate", "Delete", "Draft (locked)", "Rename"];
+    return (
+      <Menu
+        label="Note actions"
+        trigger="More"
+        items={names.map((name) => ({
+          id: name,
+          label: name,
+          onSelect: noop,
+          disabled: name === "Draft (locked)",
+          disabledReason: name === "Draft (locked)" ? "Locked by another user" : undefined,
+        }))}
+      />
+    );
+  }
+
+  function openMenu() {
+    const view = render(<TypeaheadHarness />);
+    fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+    return view;
+  }
+  function type(key: string, init: KeyboardEventInit = {}): boolean {
+    return fireEvent.keyDown(document.activeElement as HTMLElement, { key, ...init });
+  }
+  function activeName(): string | undefined {
+    return document.activeElement?.textContent ?? undefined;
+  }
+
+  beforeEach(() => vi.useFakeTimers({ toFake: ["Date"] }));
+  afterEach(() => vi.useRealTimers());
+
+  it("moves focus to the next item whose name starts with the typed letter", () => {
+    openMenu();
+    expect(activeName()).toBe("Archive");
+    type("r");
+    expect(activeName()).toBe("Rename");
+  });
+
+  it("is case-insensitive (Shift+letter)", () => {
+    openMenu();
+    type("R", { shiftKey: true });
+    expect(activeName()).toBe("Rename");
+  });
+
+  it("cycles through items with the same first letter and wraps", () => {
+    openMenu();
+    type("d");
+    expect(activeName()).toBe("Duplicate");
+    vi.advanceTimersByTime(600);
+    type("d");
+    expect(activeName()).toBe("Delete");
+    vi.advanceTimersByTime(600);
+    type("d");
+    // "Draft (locked)" is disabled and skipped, so the cycle wraps to Duplicate.
+    expect(activeName()).toBe("Duplicate");
+  });
+
+  it("treats the same letter pressed in quick succession as a cycle, not a prefix", () => {
+    openMenu();
+    type("d");
+    type("d");
+    expect(activeName()).toBe("Delete");
+    type("d");
+    expect(activeName()).toBe("Duplicate");
+  });
+
+  it("matches a prefix typed in quick succession", () => {
+    openMenu();
+    type("d");
+    type("e");
+    type("l");
+    expect(activeName()).toBe("Delete");
+  });
+
+  it("restarts the wait on every key, so a slow but steady typist is not cut off", () => {
+    const view = render(<TypeaheadHarness labels={["Archive", "Delete", "Lock"]} />);
+    fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+    type("d");
+    vi.advanceTimersByTime(300);
+    type("e");
+    vi.advanceTimersByTime(300);
+    type("l");
+    // 600 ms since the first key, 300 since the last: still the one search "del".
+    // Taken as a fresh "l" it would have moved on to "Lock".
+    expect(activeName()).toBe("Delete");
+  });
+
+  it("ends a search at 500 ms after the last key, not before", () => {
+    const view = render(<TypeaheadHarness labels={["Archive", "Delete", "Edit"]} />);
+    fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+    type("d");
+    expect(activeName()).toBe("Delete");
+    vi.advanceTimersByTime(499);
+    type("e");
+    // Still "de": stays on Delete.
+    expect(activeName()).toBe("Delete");
+    vi.advanceTimersByTime(500);
+    // A fresh "e", not "dee": lands on Edit.
+    type("e");
+    expect(activeName()).toBe("Edit");
+  });
+
+  it("matches the item's label, not other text inside the item", () => {
+    const view = render(
+      <Menu
+        label="Note actions"
+        trigger="More"
+        items={[
+          { id: "a", label: "Archive", icon: <span>{"\u2605"}</span>, onSelect: noop },
+          { id: "r", label: "Rename", icon: <span>{"\u2606"}</span>, onSelect: noop },
+        ]}
+      />,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+    type("\u2606");
+    expect(activeName()).toContain("Archive");
+    vi.advanceTimersByTime(600);
+    type("r");
+    expect(activeName()).toContain("Rename");
+  });
+
+  it("follows the items when they change while the menu is open", () => {
+    const view = render(<TypeaheadHarness labels={["Archive", "Rename"]} />);
+    fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+    view.rerender(<TypeaheadHarness labels={["Archive", "Pin", "Share"]} />);
+    type("s");
+    expect(activeName()).toBe("Share");
+  });
+
+  it("forgets what was typed after a pause", () => {
+    openMenu();
+    type("d");
+    type("e");
+    expect(activeName()).toBe("Delete");
+    vi.advanceTimersByTime(501);
+    // A fresh "r", not the prefix "der", which would match nothing.
+    type("r");
+    expect(activeName()).toBe("Rename");
+  });
+
+  it("never lands on a disabled item", () => {
+    openMenu();
+    type("d");
+    type("r");
+    type("a");
+    // "dra" would be the disabled "Draft (locked)": focus stays where it was.
+    expect(activeName()).toBe("Duplicate");
+  });
+
+  it("leaves focus where it is when nothing matches", () => {
+    openMenu();
+    type("z");
+    expect(activeName()).toBe("Archive");
+  });
+
+  it("consumes the characters it reads, so a host's own shortcut does not also fire", () => {
+    const hostShortcut = vi.fn();
+    document.addEventListener("keydown", hostShortcut);
+    try {
+      openMenu();
+      const notPrevented = type("r");
+      expect(notPrevented).toBe(false);
+      expect(hostShortcut).not.toHaveBeenCalled();
+      // Also when nothing matches: the key press still belongs to the menu.
+      expect(type("z")).toBe(false);
+      expect(hostShortcut).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener("keydown", hostShortcut);
+    }
+  });
+
+  it("ignores Ctrl, Alt and Meta chords, which belong to the browser and the host", () => {
+    openMenu();
+    for (const chord of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }]) {
+      const notPrevented = type("r", chord);
+      expect(notPrevented).toBe(true);
+      expect(activeName()).toBe("Archive");
+    }
+  });
+
+  it("does not read Ctrl+Alt unless the platform also says AltGraph is down", () => {
+    openMenu();
+    expect(type("r", { ctrlKey: true, altKey: true })).toBe(true);
+    expect(activeName()).toBe("Archive");
+  });
+
+  // On Windows AltGr is reported as Ctrl+Alt; a Polish or Czech layout types
+  // letters with it, so those must still count as typing.
+  it("reads a character typed with AltGraph, which Windows reports as Ctrl+Alt", () => {
+    const view = render(<TypeaheadHarness labels={["Archive", "ą first", "Other"]} />);
+    fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+    type("ą", { ctrlKey: true, altKey: true, modifierAltGraph: true });
+    expect(activeName()).toBe("ą first");
+  });
+
+  it("leaves keys an input method is composing to the input method", () => {
+    openMenu();
+    type("r", { isComposing: true });
+    expect(activeName()).toBe("Archive");
+    type("r", { keyCode: 229 });
+    expect(activeName()).toBe("Archive");
+  });
+
+  it("does not read named keys (Shift, F1, Enter, ArrowLeft, Backspace) as characters", () => {
+    openMenu();
+    for (const key of ["Shift", "F1", "Enter", "ArrowLeft", "Backspace", "Dead", "Unidentified"]) {
+      expect(type(key), key).toBe(true);
+      expect(activeName(), key).toBe("Archive");
+    }
+  });
+
+  it("matches non-ASCII letters", () => {
+    const view = render(<TypeaheadHarness labels={["Archivieren", "Öffnen", "Löschen"]} />);
+    fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+    type("ö");
+    expect(activeName()).toBe("Öffnen");
+    vi.advanceTimersByTime(600);
+    type("L");
+    expect(activeName()).toBe("Löschen");
+  });
+
+  it("starts matching after the focused item, whichever way focus got there", () => {
+    openMenu();
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "End" });
+    expect(activeName()).toBe("Rename");
+    type("d");
+    // After Rename, wrapping to the first D.
+    expect(activeName()).toBe("Duplicate");
+  });
+
+  it("forgets what was typed when the menu closes and reopens", () => {
+    const view = openMenu();
+    type("d");
+    type("e");
+    expect(activeName()).toBe("Delete");
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
+    fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+    // Reopened within the pause window: "e" must not extend the old "de".
+    type("r");
+    expect(activeName()).toBe("Rename");
+  });
+
+  describe("Space", () => {
+    const saveLabels = ["Archive", "Save", "Save as copy", "Save as template"];
+    function openSaveMenu() {
+      const view = render(<TypeaheadHarness labels={saveLabels} />);
+      fireEvent.click(view.getByRole("button", { name: "Note actions" }));
+      for (const key of "save") type(key);
+      expect(activeName()).toBe("Save");
+    }
+    const keyUp = () => fireEvent.keyUp(document.activeElement as HTMLElement, { key: " " });
+
+    it("still activates the focused item when nothing is being typed", () => {
+      openMenu();
+      expect(type(" ")).toBe(true);
+      expect(keyUp()).toBe(true);
+    });
+
+    it("is part of the search while something starts with the text so far, and does not activate", () => {
+      openSaveMenu();
+      expect(type(" ")).toBe(false);
+      expect(activeName()).toBe("Save as copy");
+      // The key-up that would click a native button is cancelled too (Firefox
+      // fires the click from keyup even when keydown was prevented).
+      expect(keyUp()).toBe(false);
+      for (const key of "as ") type(key);
+      type("t");
+      expect(activeName()).toBe("Save as template");
+    });
+
+    it("still activates the item a search just landed on when no label continues with a space", () => {
+      openMenu();
+      type("d");
+      expect(activeName()).toBe("Duplicate");
+      // "d " starts nothing, so this is the activation key, not more typing.
+      expect(type(" ")).toBe(true);
+      expect(keyUp()).toBe(true);
+    });
+
+    it("activates again once the pause has ended", () => {
+      openSaveMenu();
+      vi.advanceTimersByTime(600);
+      expect(type(" ")).toBe(true);
+      expect(keyUp()).toBe(true);
+    });
+
+    // Fast typists press the next key before releasing the last: the Space
+    // key-up then arrives after another keydown and lands on the item that key
+    // just focused. It must still be cancelled, or Firefox clicks that item.
+    it("cancels the key-up of a consumed Space even when another key went down first", () => {
+      openSaveMenu();
+      expect(type(" ")).toBe(false);
+      type("a");
+      expect(keyUp()).toBe(false);
+      // And only that one key-up.
+      expect(keyUp()).toBe(true);
+    });
+
+    it("keeps taking a held Space's repeats once the first press was the search's", () => {
+      openSaveMenu();
+      expect(type(" ")).toBe(false);
+      expect(type(" ", { repeat: true })).toBe(false);
+      expect(keyUp()).toBe(false);
+    });
+
+    it("does not let a key-up that never came swallow a later Space activation", () => {
+      openSaveMenu();
+      expect(type(" ")).toBe(false);
+      // No key-up (focus left the window); later a plain Space press activates.
+      vi.advanceTimersByTime(600);
+      expect(type(" ")).toBe(true);
+      expect(keyUp()).toBe(true);
+    });
+  });
+
+  it("activates the item the search landed on", () => {
+    const onSelect = vi.fn();
+    const { getByRole } = render(
+      <Menu
+        label="Note actions"
+        trigger="More"
+        items={[
+          { id: "a", label: "Archive", onSelect: noop },
+          { id: "r", label: "Rename", onSelect },
+        ]}
+      />,
+    );
+    fireEvent.click(getByRole("button", { name: "Note actions" }));
+    type("r");
+    // Enter and Space on a native button are clicks; jsdom does not synthesise them.
+    (document.activeElement as HTMLElement).click();
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no axe violations after typing", async () => {
+    const { container } = openMenu();
+    type("r");
+    await expectNoAxeViolations(container);
+  });
+});
+
 describe("Dialog", () => {
   afterEach(() => resetOverlayStackForTests());
 
@@ -1576,6 +1922,18 @@ describe("Menu inside Dialog", () => {
 
     fireEvent.keyDown(trigger, { key: "Escape" });
     expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("types ahead inside a dialog without dismissing it, and Escape still closes only the menu", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(<Harness onDismiss={onDismiss} />);
+    fireEvent.click(getByRole("button", { name: "Note actions" }));
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "d" });
+    expect(document.activeElement).toBe(getByRole("menuitem", { name: "Delete" }));
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
+    expect(queryByRole("menu")).toBeNull();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
   it("still dismisses on Escape from ordinary dialog content", () => {

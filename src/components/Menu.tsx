@@ -1,7 +1,8 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { cx } from "./cx";
-import { isPlainKeyPress } from "./keyboard";
+import { isPlainKeyPress, isTypingKeyPress } from "./keyboard";
+import { findTypeaheadMatch, TYPEAHEAD_RESET_MS } from "./typeahead";
 
 export type MenuAlign = "start" | "end";
 export type MenuItemVariant = "default" | "danger";
@@ -61,13 +62,25 @@ export function Menu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const focusEdgeRef = useRef<"first" | "last">("first");
+  // What was typed since the last pause, and when. A timestamp rather than a
+  // timer: nothing to clean up, and a stale search can never outlive the menu.
+  const typeaheadRef = useRef({ buffer: "", at: 0 });
+  // A Space the search consumed must not also activate the focused item when it
+  // is released.
+  const swallowSpaceUpRef = useRef(false);
   const idRef = useRef<string | undefined>(undefined);
   if (!idRef.current) {
     menuCounter += 1;
     idRef.current = `ds-menu-${menuCounter}`;
   }
 
+  function resetTypeahead() {
+    typeaheadRef.current = { buffer: "", at: 0 };
+    swallowSpaceUpRef.current = false;
+  }
+
   function close(restoreFocus: boolean) {
+    resetTypeahead();
     setOpen(false);
     setPosition(null);
     if (restoreFocus) triggerRef.current?.focus();
@@ -76,6 +89,7 @@ export function Menu({
   function show(edge: "first" | "last" = "first") {
     if (disabled || items.length === 0) return;
     focusEdgeRef.current = edge;
+    resetTypeahead();
     setOpen(true);
   }
 
@@ -154,6 +168,67 @@ export function Menu({
     };
   }, [open]);
 
+  /** Type-ahead: characters typed in quick succession move focus to the next
+   * enabled item whose label starts with them. The menu consumes every
+   * character it reads, matched or not, so a host's single-key shortcut does
+   * not fire for a key that was meant for the menu (Escape works the same way).
+   * Space is the exception, because it also activates the focused item: it
+   * joins a search only while one is under way and only when something starts
+   * with the text so far, a space included ("Save as"). Pressed straight after
+   * "d" that lands on "Delete", it still activates "Delete". */
+  function typeAhead(
+    event: JSX.TargetedKeyboardEvent<HTMLDivElement>,
+    menu: HTMLElement,
+  ) {
+    const isSpace = event.key === " ";
+    if (isSpace && event.repeat && swallowSpaceUpRef.current) {
+      // A held Space repeats its keydown; the press the search took keeps it.
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    const now = Date.now();
+    const typed = typeaheadRef.current;
+    const elapsed = now - typed.at;
+    const searching = typed.buffer !== "" && elapsed >= 0 && elapsed < TYPEAHEAD_RESET_MS;
+    if (isSpace && !searching) {
+      swallowSpaceUpRef.current = false;
+      return;
+    }
+    const buffer = (searching ? typed.buffer : "") + event.key;
+    const rendered = Array.from(
+      menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+    );
+    const available = rendered.filter((button) => !button.disabled);
+    const labels = available.map(
+      (button) => items[rendered.indexOf(button)]?.label ?? button.textContent ?? "",
+    );
+    const match = findTypeaheadMatch(
+      labels,
+      buffer,
+      available.indexOf(document.activeElement as HTMLButtonElement),
+    );
+    if (isSpace && match < 0) {
+      swallowSpaceUpRef.current = false;
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    // Set by this Space press only: other keys going down while it is still
+    // held (fast typing rolls one key into the next) must not clear it, or its
+    // key-up would reach the item the search just focused and click it.
+    if (isSpace) swallowSpaceUpRef.current = true;
+    typeaheadRef.current = { buffer, at: now };
+    if (match >= 0) available[match]?.focus();
+  }
+
+  function onMenuKeyUp(event: JSX.TargetedKeyboardEvent<HTMLDivElement>) {
+    if (event.key === " " && swallowSpaceUpRef.current) {
+      swallowSpaceUpRef.current = false;
+      event.preventDefault();
+    }
+  }
+
   function onMenuKeyDown(event: JSX.TargetedKeyboardEvent<HTMLDivElement>) {
     const menu = menuRef.current;
     if (!menu) return;
@@ -167,6 +242,10 @@ export function Menu({
     }
     if (event.key === "Tab") {
       close(false);
+      return;
+    }
+    if (isTypingKeyPress(event)) {
+      typeAhead(event, menu);
       return;
     }
     // Alt, Ctrl and Meta chords stay with the browser and the host.
@@ -244,6 +323,7 @@ export function Menu({
               : { visibility: "hidden" }
           }
           onKeyDown={onMenuKeyDown}
+          onKeyUp={onMenuKeyUp}
         >
           {items.map((item) => {
             const reasonId = item.disabledReason
