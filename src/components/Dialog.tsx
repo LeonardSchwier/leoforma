@@ -10,6 +10,7 @@ import {
   pushOverlay,
   type OverlayDismissReason,
 } from "./overlayStack";
+import { dismissShowingTooltipsWithin } from "./tooltipRegistry";
 
 export type DialogRole = "dialog" | "alertdialog";
 export type DialogSize = "sm" | "md" | "lg";
@@ -126,6 +127,15 @@ export function Dialog({
         // the more general fix, but it changes what a host's back handler sees.
         const menu = (event.target as Element | null)?.closest?.("[data-ds-menu]");
         if (menu && current?.contains(menu)) return;
+        // A tooltip showing inside the dialog takes the first Escape (WCAG
+        // 1.4.13, dismissible), so a keyboard user who only meant to hide it does
+        // not lose the dialog and what they typed in it. The next Escape reaches
+        // the dialog. Tooltips outside it, behind the modal, are left alone.
+        if (current && dismissShowingTooltipsWithin(current)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         if (closeOnEscapeRef.current) dismissRef.current("escape");

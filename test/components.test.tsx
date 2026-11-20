@@ -1889,6 +1889,236 @@ describe("Dialog focus trap", () => {
   });
 });
 
+// A Dialog listens for Escape in the capture phase and stops the event, so a
+// Tooltip's own listener never saw it inside one: pressing Escape to hide a
+// tooltip closed the whole dialog and dropped what the user had typed (WCAG
+// 1.4.13, dismissible). A showing tooltip inside the dialog now takes the first
+// Escape and the next one reaches the dialog, as for a Menu.
+describe("Tooltip inside Dialog", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    resetOverlayStackForTests();
+  });
+
+  it("hides a tooltip shown by focus on the first Escape, and dismisses on the next", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(
+      <Dialog title="Note" onDismiss={onDismiss}>
+        <Tooltip content="Hint">
+          <Button>Help</Button>
+        </Tooltip>
+      </Dialog>,
+    );
+    const help = getByRole("button", { name: "Help" });
+    expect(document.activeElement).toBe(help);
+    expect(getByRole("tooltip").textContent).toBe("Hint");
+
+    // Consumed: the browser default is cancelled and nothing else reacts to it.
+    expect(fireEvent.keyDown(help, { key: "Escape" })).toBe(false);
+    expect(queryByRole("tooltip")).toBeNull();
+    expect(help.getAttribute("aria-describedby")).toBeNull();
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(help, { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("hides a tooltip shown by hover while focus is on another control", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(
+      <Dialog title="Note" onDismiss={onDismiss}>
+        <Button>First</Button>
+        <Tooltip content="Hint" delay={300}>
+          <Button>Help</Button>
+        </Tooltip>
+      </Dialog>,
+    );
+    const first = getByRole("button", { name: "First" });
+    expect(document.activeElement).toBe(first);
+    fireEvent.mouseEnter(getByRole("button", { name: "Help" }));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(getByRole("tooltip")).toBeTruthy();
+
+    fireEvent.keyDown(first, { key: "Escape" });
+    expect(queryByRole("tooltip")).toBeNull();
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.keyDown(first, { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("does the same in a Sheet", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(
+      <Sheet title="Note" onDismiss={onDismiss}>
+        <Tooltip content="Hint">
+          <Button>Help</Button>
+        </Tooltip>
+      </Sheet>,
+    );
+    const help = getByRole("button", { name: "Help" });
+    act(() => help.focus());
+    expect(getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(help, { key: "Escape" });
+    expect(queryByRole("tooltip")).toBeNull();
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.keyDown(help, { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("hides the tooltip even when the dialog cannot be closed with Escape", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(
+      <Dialog title="Note" closeOnEscape={false} onDismiss={onDismiss}>
+        <Tooltip content="Hint">
+          <Button>Help</Button>
+        </Tooltip>
+      </Dialog>,
+    );
+    const help = getByRole("button", { name: "Help" });
+    fireEvent.keyDown(help, { key: "Escape" });
+    expect(queryByRole("tooltip")).toBeNull();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("dismisses at once when no tooltip is showing", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, queryByRole } = render(
+      <Dialog title="Note" onDismiss={onDismiss}>
+        <Button>First</Button>
+        <Tooltip content="Hint">
+          <Button>Help</Button>
+        </Tooltip>
+      </Dialog>,
+    );
+    expect(queryByRole("tooltip")).toBeNull();
+    fireEvent.keyDown(getByRole("button", { name: "First" }), { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("does not let a tooltip that is no longer showing take the Escape", () => {
+    const onDismiss = vi.fn();
+    const dialog = (disabled: boolean) => (
+      <Dialog title="Note" onDismiss={onDismiss}>
+        <Tooltip content="Hint" disabled={disabled}>
+          <Button>Help</Button>
+        </Tooltip>
+      </Dialog>
+    );
+    const { getByRole, queryByRole, rerender } = render(dialog(false));
+    expect(getByRole("tooltip")).toBeTruthy();
+    // The state still says open, but nothing is showing.
+    rerender(dialog(true));
+    expect(queryByRole("tooltip")).toBeNull();
+    fireEvent.keyDown(getByRole("button", { name: "Help" }), { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("leaves a tooltip that is open behind the dialog alone", () => {
+    const onDismiss = vi.fn();
+    const { getByRole, getAllByRole } = render(
+      <div>
+        <Tooltip content="Behind" delay={0}>
+          <Button>Outside</Button>
+        </Tooltip>
+        <Dialog title="Note" onDismiss={onDismiss}>
+          <Button>Inside</Button>
+        </Dialog>
+      </div>,
+    );
+    fireEvent.mouseEnter(getByRole("button", { name: "Outside" }));
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(getAllByRole("tooltip")).toHaveLength(1);
+
+    // The tooltip behind the modal must not swallow the Escape meant for it, and
+    // it is not the dialog's to hide.
+    fireEvent.keyDown(getByRole("button", { name: "Inside" }), { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+    expect(getAllByRole("tooltip")).toHaveLength(1);
+  });
+
+  it("only looks inside the topmost of two stacked dialogs", () => {
+    const lower = vi.fn();
+    const upper = vi.fn();
+    const { getByRole } = render(
+      <div>
+        <Dialog title="Lower" onDismiss={lower}>
+          <Tooltip content="Lower hint" delay={0}>
+            <Button>Lower help</Button>
+          </Tooltip>
+        </Dialog>
+        <Dialog title="Upper" onDismiss={upper}>
+          <Button>Upper action</Button>
+        </Dialog>
+      </div>,
+    );
+    fireEvent.mouseEnter(getByRole("button", { name: "Lower help" }));
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(getByRole("tooltip")).toBeTruthy();
+    // The upper dialog owns this Escape and has no tooltip of its own.
+    fireEvent.keyDown(getByRole("button", { name: "Upper action" }), { key: "Escape" });
+    expect(upper).toHaveBeenCalledWith("escape");
+    expect(lower).not.toHaveBeenCalled();
+    expect(getByRole("tooltip")).toBeTruthy();
+  });
+
+  it("leaves Escape to the input method while it is composing", () => {
+    const onDismiss = vi.fn();
+    const { getByRole } = render(
+      <Dialog title="Note" onDismiss={onDismiss}>
+        <Tooltip content="Hint">
+          <Button>Help</Button>
+        </Tooltip>
+      </Dialog>,
+    );
+    fireEvent.keyDown(getByRole("button", { name: "Help" }), {
+      key: "Escape",
+      isComposing: true,
+    });
+    expect(getByRole("tooltip")).toBeTruthy();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("does not change Escape outside a dialog: the tooltip closes and the host still sees the key", () => {
+    const seen = vi.fn();
+    document.addEventListener("keydown", seen);
+    try {
+      const { getByRole, queryByRole } = render(
+        <Tooltip content="Hint">
+          <Button>Help</Button>
+        </Tooltip>,
+      );
+      fireEvent.focus(getByRole("button", { name: "Help" }));
+      expect(getByRole("tooltip")).toBeTruthy();
+      fireEvent.keyDown(getByRole("button", { name: "Help" }), { key: "Escape" });
+      expect(queryByRole("tooltip")).toBeNull();
+      expect(seen).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener("keydown", seen);
+    }
+  });
+
+  it("has no axe violations with a tooltip showing in a dialog", async () => {
+    vi.useRealTimers(); // axe-core schedules its own timers
+    const { container, getByRole } = render(
+      <Dialog title="Note" onDismiss={() => undefined}>
+        <Tooltip content="Hint">
+          <Button>Help</Button>
+        </Tooltip>
+      </Dialog>,
+    );
+    expect(getByRole("tooltip")).toBeTruthy();
+    await expectNoAxeViolations(container);
+  });
+});
+
 describe("Menu inside Dialog", () => {
   afterEach(() => resetOverlayStackForTests());
 

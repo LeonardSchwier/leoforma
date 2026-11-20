@@ -1,7 +1,8 @@
 import { cloneElement, isValidElement } from "preact";
 import type { JSX, VNode } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { isImeKeyPress } from "./keyboard";
+import { registerShowingTooltip } from "./tooltipRegistry";
 
 export type TooltipPlacement = "top" | "bottom" | "left" | "right";
 
@@ -52,6 +53,7 @@ export function Tooltip({
   const openRef = useRef(open);
   openRef.current = open;
   const triggerRef = useRef<HTMLElement | null>(null);
+  const anchorRef = useRef<HTMLSpanElement>(null);
   // Set when focus opened (or re-opened) the tooltip; cleared whenever the
   // tooltip closes (blur, Escape, the grace period), so a tooltip the user
   // dismissed and then hovered open again does not stay pinned by the focus
@@ -113,11 +115,31 @@ export function Tooltip({
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
   }, []);
 
+  // While showing, let a Dialog or Sheet around this tooltip dismiss it on
+  // Escape before it closes itself (see tooltipRegistry). Registered only while
+  // showing, so a disabled tooltip, or one with empty content whose `open` is
+  // stale, never takes an Escape that was meant for the dialog.
+  // A layout effect, so the entry is added and removed in the commit that shows
+  // or hides the tooltip: a passive effect runs after paint, and an Escape (or a
+  // held key repeating) in that gap would see a stale entry.
+  const showing = open && active;
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    if (!showing || !anchor) return;
+    return registerShowingTooltip({
+      anchor,
+      dismiss: () => {
+        clearTimer();
+        focusOpenedRef.current = false;
+        setOpen(false);
+      },
+    });
+  }, [showing]);
+
   if (!isValidElement(children)) {
     return children as unknown as JSX.Element;
   }
 
-  const showing = open && active;
   const childProps = children.props;
   const trigger = cloneElement(children, {
     "aria-describedby": showing
@@ -156,7 +178,7 @@ export function Tooltip({
   } as Partial<TriggerProps>);
 
   return (
-    <span class="ds-tooltip-anchor">
+    <span ref={anchorRef} class="ds-tooltip-anchor">
       {trigger}
       {showing && (
         <span
