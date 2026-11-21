@@ -27,8 +27,10 @@ import {
   ToastRegion,
   Tooltip,
 } from "../src";
+import { focusableElements } from "../src/components/overlayStack";
 import { rovingTabStop } from "../src/components/rovingKeys";
 import { expectNoAxeViolations } from "./axeCheck";
+import { installCheckVisibilityStub } from "./checkVisibility";
 
 const icon = <svg aria-hidden="true" width="16" height="16" />;
 
@@ -1886,6 +1888,402 @@ describe("Dialog focus trap", () => {
     getByText("Last").focus();
     expect(tab()).toBe(false);
     expect(document.activeElement).toBe(getByText("First"));
+  });
+});
+
+// A browser cannot focus a control that CSS takes out of rendering, so such a
+// control must not count as the first or last tab stop: when it did, Tab or
+// Shift+Tab at the real edge was left to the browser and left the modal (WCAG
+// 2.4.3). `checkVisibility` is how the trap asks; jsdom has none, so these tests
+// install a stand-in that follows the spec, and the last block runs without it.
+describe("Dialog focus trap and CSS-hidden controls", () => {
+  let restoreCheckVisibility: () => void;
+  beforeEach(() => {
+    restoreCheckVisibility = installCheckVisibilityStub();
+  });
+  afterEach(() => {
+    restoreCheckVisibility();
+    resetOverlayStackForTests();
+  });
+
+  const tab = (shiftKey = false) =>
+    fireEvent.keyDown(document, { key: "Tab", shiftKey });
+
+  it("wraps at the last visible control when a display:none control follows it", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>First</Button>
+        <Button>Visible</Button>
+        <div style="display: none">
+          <button type="button">Ghost</button>
+        </div>
+      </Dialog>,
+    );
+    const first = getByRole("button", { name: "First" });
+    const visible = getByRole("button", { name: "Visible" });
+    visible.focus();
+    expect(tab()).toBe(false); // wrapped by the trap, not left to the browser
+    expect(document.activeElement).toBe(first);
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(visible);
+  });
+
+  it("starts on, and wraps to, the first visible control when a hidden one precedes it", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <div style="display: none">
+          <button type="button">Ghost</button>
+        </div>
+        <Button>One</Button>
+        <Button>Two</Button>
+      </Dialog>,
+    );
+    const one = getByRole("button", { name: "One" });
+    const two = getByRole("button", { name: "Two" });
+    expect(document.activeElement).toBe(one); // not skipped for a ghost
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(two);
+    expect(tab()).toBe(false);
+    expect(document.activeElement).toBe(one);
+  });
+
+  it("skips a control whose own visibility is hidden, and one under a hidden ancestor", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <input aria-label="Ghost own" style="visibility: hidden" />
+        <Button>Real</Button>
+        <div style="visibility: hidden">
+          <button type="button">Ghost inherited</button>
+        </div>
+      </Dialog>,
+    );
+    const real = getByRole("button", { name: "Real" });
+    expect(document.activeElement).toBe(real);
+    expect(tab()).toBe(false);
+    expect(document.activeElement).toBe(real);
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(real);
+  });
+
+  it("keeps a visible control inside a visibility:hidden ancestor as a stop", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>Before</Button>
+        <div style="visibility: hidden">
+          <button type="button" style="visibility: visible">
+            Shown
+          </button>
+        </div>
+      </Dialog>,
+    );
+    const shown = getByRole("button", { name: "Shown", hidden: true });
+    shown.focus();
+    expect(tab()).toBe(false); // it is the last stop
+    expect(document.activeElement).toBe(getByRole("button", { name: "Before" }));
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(shown);
+  });
+
+  it("does not skip a transparent or off-screen control", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>First</Button>
+        <button type="button" style="opacity: 0">
+          Transparent
+        </button>
+        <a href="#main" style="position: absolute; left: -9999px">
+          Skip
+        </a>
+      </Dialog>,
+    );
+    const skip = getByRole("link", { name: "Skip" });
+    skip.focus();
+    expect(tab()).toBe(false);
+    expect(document.activeElement).toBe(getByRole("button", { name: "First" }));
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(skip);
+  });
+
+  it("asks only about display and visibility, never opacity or content-visibility", () => {
+    const spy = vi.fn(() => true);
+    Object.defineProperty(Element.prototype, "checkVisibility", {
+      configurable: true,
+      writable: true,
+      value: spy,
+    });
+    const { container } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>One</Button>
+      </Dialog>,
+    );
+    const surface = container.ownerDocument.querySelector<HTMLElement>(
+      '[role="dialog"]',
+    )!;
+    expect(spy).toHaveBeenCalled();
+    spy.mockClear();
+    focusableElements(surface);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith({
+      checkVisibilityCSS: true,
+      visibilityProperty: true,
+    });
+  });
+
+  it("counts the summary of a <details> as a stop and the content of a closed one as none", () => {
+    const { getByRole, getByText } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>Before</Button>
+        <details>
+          <summary>More</summary>
+          <button type="button">Inner</button>
+        </details>
+      </Dialog>,
+    );
+    const before = getByRole("button", { name: "Before" });
+    const summary = getByText("More");
+    expect(document.activeElement).toBe(before);
+    expect(tab()).toBe(true); // the summary comes after it: the browser moves on
+    summary.focus();
+    expect(tab()).toBe(false); // the summary is the last stop; Inner is hidden
+    expect(document.activeElement).toBe(before);
+    expect(tab(true)).toBe(false); // Shift+Tab from the first stop reaches it
+    expect(document.activeElement).toBe(summary);
+  });
+
+  it("counts the summary and the content of an open <details>", () => {
+    const { getByRole, getByText } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>Before</Button>
+        <details open>
+          <summary>More</summary>
+          <button type="button">Inner</button>
+        </details>
+      </Dialog>,
+    );
+    const inner = getByRole("button", { name: "Inner" });
+    getByText("More").focus();
+    expect(tab()).toBe(true); // Inner is still ahead
+    inner.focus();
+    expect(tab()).toBe(false);
+    expect(document.activeElement).toBe(getByRole("button", { name: "Before" }));
+  });
+
+  it("treats only the first <summary> of a <details> as a stop", () => {
+    const { getByText } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <details open>
+          <summary>First summary</summary>
+          <summary>Second summary</summary>
+        </details>
+        <summary>Orphan</summary>
+      </Dialog>,
+    );
+    const stops = focusableElements(
+      getByText("First summary").closest<HTMLElement>('[role="dialog"]')!,
+    );
+    expect(stops.map((stop) => stop.textContent)).toEqual(["First summary"]);
+  });
+
+  it("pins focus to the dialog when every control is hidden by CSS", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <div style="display: none">
+          <button type="button">Ghost</button>
+        </div>
+      </Dialog>,
+    );
+    const dialog = getByRole("dialog");
+    expect(document.activeElement).toBe(dialog);
+    expect(tab()).toBe(false);
+    expect(document.activeElement).toBe(dialog);
+    expect(tab(true)).toBe(false);
+    expect(document.activeElement).toBe(dialog);
+  });
+
+  it("does the same in a Sheet", () => {
+    const { getByRole } = render(
+      <Sheet title="T" onDismiss={() => {}}>
+        <Button>Visible</Button>
+        <div style="display: none">
+          <button type="button">Ghost</button>
+        </div>
+      </Sheet>,
+    );
+    // The close button comes first in a Sheet; "Visible" is the last real stop.
+    const visible = getByRole("button", { name: "Visible" });
+    visible.focus();
+    expect(tab()).toBe(false);
+    expect(document.activeElement).toBe(getByRole("button", { name: /close/i }));
+  });
+
+  it("skips a control with display:contents, which has no box to focus", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>One</Button>
+        <button type="button" style="display: contents">
+          Contents
+        </button>
+      </Dialog>,
+    );
+    const one = getByRole("button", { name: "One" });
+    expect(tab()).toBe(false); // One is the last stop
+    expect(document.activeElement).toBe(one);
+  });
+
+  it("reads the styles again on every Tab, so a control hidden after mount stops counting", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>First</Button>
+        <Button>Second</Button>
+        <Button>Third</Button>
+      </Dialog>,
+    );
+    const first = getByRole("button", { name: "First" });
+    const second = getByRole("button", { name: "Second" });
+    const third = getByRole("button", { name: "Third" });
+    second.focus();
+    expect(tab()).toBe(true); // Third is still ahead
+    third.style.display = "none";
+    expect(tab()).toBe(false); // now Second is the last stop
+    expect(document.activeElement).toBe(first);
+    third.style.display = "";
+    second.focus();
+    expect(tab()).toBe(true);
+  });
+
+  it("follows a <details> that is opened after mount", () => {
+    const { getByRole, getByText } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>Before</Button>
+        <details>
+          <summary>More</summary>
+          <button type="button">Inner</button>
+        </details>
+      </Dialog>,
+    );
+    const summary = getByText("More");
+    summary.focus();
+    expect(tab()).toBe(false); // closed: the summary is the last stop
+    expect(document.activeElement).toBe(getByRole("button", { name: "Before" }));
+    summary.parentElement!.setAttribute("open", "");
+    summary.focus();
+    expect(tab()).toBe(true); // open: Inner follows it
+    getByRole("button", { name: "Inner" }).focus();
+    expect(tab()).toBe(false);
+  });
+
+  it("skips a <summary> that is itself display:none or has tabindex=-1", () => {
+    const { getByText } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>One</Button>
+        <details>
+          <summary style="display: none">Gone</summary>
+        </details>
+        <details>
+          <summary tabIndex={-1}>Roving</summary>
+        </details>
+      </Dialog>,
+    );
+    const stops = focusableElements(
+      getByText("One").closest<HTMLElement>('[role="dialog"]')!,
+    );
+    expect(stops.map((stop) => stop.textContent)).toEqual(["One"]);
+  });
+
+  it("has no axe violations with a closed disclosure and hidden controls", async () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <details>
+          <summary>More</summary>
+          <button type="button">Inner</button>
+        </details>
+        <div style="display: none">
+          <button type="button">Ghost</button>
+        </div>
+      </Dialog>,
+    );
+    await expectNoAxeViolations(getByRole("dialog"));
+  });
+});
+
+// Chrome before 105, Firefox before 106 and Safari before 17.4 have no
+// checkVisibility, and neither has jsdom: no stand-in is installed here.
+describe("Dialog focus trap in an engine without checkVisibility", () => {
+  afterEach(() => resetOverlayStackForTests());
+
+  const tab = (shiftKey = false) =>
+    fireEvent.keyDown(document, { key: "Tab", shiftKey });
+
+  it("has none to call, which is what jsdom is like", () => {
+    expect(typeof Element.prototype.checkVisibility).toBe("undefined");
+  });
+
+  it("falls back to the markup checks and does not throw", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>First</Button>
+        <Button>Visible</Button>
+        <div hidden>
+          <button type="button">Markup ghost</button>
+        </div>
+        <div style="display: none">
+          <button type="button">CSS ghost</button>
+        </div>
+      </Dialog>,
+    );
+    const surface = getByRole("dialog");
+    expect(focusableElements(surface).map((stop) => stop.textContent)).toEqual([
+      "First",
+      "Visible",
+      "CSS ghost",
+    ]);
+    // Known limit of the fallback: the CSS ghost still counts as the last stop.
+    getByRole("button", { name: "Visible" }).focus();
+    expect(tab()).toBe(true);
+  });
+
+  // A closed <details> is decided from the markup, so it needs no
+  // checkVisibility: the content of one, nested ones included, is never a stop.
+  it("still leaves the content of a closed <details> out, nested ones too", () => {
+    const { getByRole, getByText } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <Button>A</Button>
+        <details>
+          <summary>Outer</summary>
+          <details>
+            <summary>Inner</summary>
+            <p>text</p>
+          </details>
+          <button type="button">Inside</button>
+        </details>
+      </Dialog>,
+    );
+    const stops = focusableElements(getByRole("dialog"));
+    expect(stops.map((stop) => stop.textContent)).toEqual(["A", "Outer"]);
+    getByText("Outer").focus();
+    expect(tab()).toBe(false); // Outer is the last stop: wrap, do not leave
+    expect(document.activeElement).toBe(getByRole("button", { name: "A" }));
+  });
+
+  it("counts the content of an open <details> and its nested closed one correctly", () => {
+    const { getByRole } = render(
+      <Dialog title="T" onDismiss={() => {}}>
+        <details open>
+          <summary>Outer</summary>
+          <button type="button">Inside</button>
+          <details>
+            <summary>Inner</summary>
+            <button type="button">Deep</button>
+          </details>
+        </details>
+      </Dialog>,
+    );
+    const stops = focusableElements(getByRole("dialog"));
+    expect(stops.map((stop) => stop.textContent)).toEqual([
+      "Outer",
+      "Inside",
+      "Inner",
+    ]);
   });
 });
 
